@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111418">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Brzina vozila 0.4 beta</title>
+<title>Brzina vozila 0.4.2 beta</title>
 <style>
   :root{--bg:#111418;--card:#1b2027;--line:#2c343f;--fg:#e8edf2;--mut:#93a0ad;--acc:#4ea1ff;--ok:#3ecf8e;--warn:#ffb454;--bad:#ff6b6b}
   *{box-sizing:border-box}
@@ -106,7 +106,7 @@
     <label class="btn big">📁 Odaberi video
       <input id="inFile" type="file" accept="video/*" hidden>
     </label>
-    <div style="font-size:11px;color:#6b7785;margin-top:6px">verzija 0.4 beta</div>
+    <div style="font-size:11px;color:#6b7785;margin-top:6px">verzija 0.4.2 beta</div>
   </section>
 
   <!-- NAKON OBRADE: pregled, rezultati, popis -->
@@ -238,6 +238,10 @@ let calMode=false;
 
 /* ---------- pomoćne ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let wl=null, wlN=0;      // zaslon ostaje upaljen dok traje pretraga/mjerenje
+async function wakeOn(){ wlN++; try{ if(navigator.wakeLock&&!wl){ wl=await navigator.wakeLock.request('screen'); wl.addEventListener('release',()=>{wl=null}) } }catch(e){} }
+function wakeOff(){ wlN=Math.max(0,wlN-1); if(!wlN&&wl){ try{wl.release()}catch(e){} wl=null } }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&wlN&&!wl) { wlN--; wakeOn() } });
 const fmt=(x,d=1)=>Number.isFinite(x)?x.toFixed(d):'–';
 function curF(){ // f u pikselima za trenutnu rezoluciju
   const f4k=parseFloat($('fIn').value)||2900;
@@ -246,6 +250,8 @@ function curF(){ // f u pikselima za trenutnu rezoluciju
 
 /* ---------- učitavanje videa ---------- */
 function loadBlob(blob,name){
+  try{ V.pause() }catch(e){}
+  V.onloadedmetadata=null; V.onerror=null; V.removeAttribute('src'); V.load();      // oslobodi dekoder prethodnog videa
   if(srcURL) URL.revokeObjectURL(srcURL);
   srcURL=URL.createObjectURL(blob); srcName=name||'snimka';
   V.src=srcURL; V.load();
@@ -266,7 +272,7 @@ function loadBlob(blob,name){
         updateInfo(); res();
       }catch(e){rej(e)}
     };
-    V.onerror=()=>rej(new Error('Preglednik ne može otvoriti ovaj video (kodek?)'));
+    V.onerror=()=>{ const e=V.error; rej(new Error('Preglednik ne može otvoriti ovaj video'+(e?` (kod ${e.code}${e.message?': '+e.message:''})`:'')+` · ${blob.type||'nepoznat tip'}, ${((blob.size||0)/1048576).toFixed(0)} MB`)) };
   });
 }
 let srcSize=0;
@@ -345,7 +351,8 @@ async function onFile(f){
   if(!f) return;
   $('vinfo').textContent='Učitavam…'; srcSize=f.size||0;
   vehicles=[]; renderVeh(); $('vehInfo').textContent=''; lastResult=null;
-  try{await loadBlob(f,f.name||'snimka')}catch(e){ alert('Video se ne može učitati: '+e.message); return }
+  try{ try{await loadBlob(f,f.name||'snimka')}catch(e1){ console.warn(e1); await sleep(700); await loadBlob(f,f.name||'snimka') } }
+  catch(e){ alert('Video se ne može učitati: '+e.message+'\nZatvorite druge kartice/aplikacije koje koriste kameru ili video i pokušajte ponovno.'); showScreen('start'); return }
   showScreen('none'); scanVehicles();
 }
 function showScreen(n){ $('scrStart').classList.toggle('hide',n!=='start'); $('scrRes').classList.toggle('hide',n!=='res'); window.scrollTo(0,0) }  // 'none' = sve skriveno (traženje/označavanje/mjerenje)
@@ -639,12 +646,14 @@ function speedOf(pts,f,wmin){
 /* ---------- mjerenje ---------- */
 let ctl=null;
 async function startMeasure(t0,rect,veh,refRoiIn){
-  ctl={cancel:false,rate:0.25}; V.classList.add('full'); $('ovProg').classList.add('on'); $('pBar').value=0;
+  ctl={cancel:false,rate:0.25}; wakeOn(); V.classList.add('full'); $('ovProg').classList.add('on'); $('pBar').value=0;
   $('pTitle').textContent='1/3 · Čitam sličice videa (reproducira se polako)…'; $('pTxt').textContent='';
   const t1=performance.now(); let result=null;
   const refRoi=refRoiIn||grab(rect.cx-rect.w*1.5,rect.cy-rect.h*6,rect.cx+rect.w*1.5,rect.cy+rect.h*6);  // spremljeni isječak (ponuda) ili sličica koja je sada prikazana
   const box=plan(rect), tS=Math.max(0,t0-5.5), tE=Math.min(dur,t0+2.5);
-  ctl.onCap=(n,p)=>{ $('pBar').value=Math.round(Math.min(1,Math.max(0,p))*100); $('pTxt').textContent=`${n} sličica pročitano (${Math.round(Math.min(1,Math.max(0,p))*100)} %)`; };
+  ctl.nCap=0; ctl.onCap=(n,p)=>{ ctl.nCap=n; ctl.pc=Math.round(Math.min(1,Math.max(0,p))*100); $('pBar').value=ctl.pc; };
+  $('pTxt').textContent='Pokrećem reprodukciju…';
+  ctl.tick=setInterval(()=>{ if(ctl.phase===2) return; const e=Math.round((performance.now()-t1)/1000); $('pTxt').textContent=`${ctl.nCap||0} sličica pročitano (${ctl.pc||0} %) · ${e} s`+(e>10&&!ctl.nCap?' · čekam prve sličice videa…':''); },500);
   try{
     const frames=await captureFrames(tS,tE,box,ctl);
     if(frames.length<5||!refRoi) throw new Error('Nije pročitano dovoljno sličica (preglednik nije dao okvire videa). '+frames.length+' sl., ref='+!!refRoi);
@@ -653,7 +662,7 @@ async function startMeasure(t0,rect,veh,refRoiIn){
     const ref=pickRef(frames,box,t0,refRoi,rect);
     if(!ref) throw new Error('Oznaka pločice nije pronađena u pročitanim sličicama.');
     ctl.refdx=ref.dx||0; ctl.refdy=ref.dy||0;
-    $('pTitle').textContent='2/3 · Pratim pločicu unatrag i naprijed…'; $('pBar').value=0;
+    ctl.phase=2; $('pTitle').textContent='2/3 · Pratim pločicu unatrag i naprijed…'; $('pBar').value=0;
     let nb=0,nf=0; ctl.onStep=(dir,n,W)=>{ if(dir<0) nb=n; else nf=n; $('pBar').value=Math.min(100,Math.round(100*(nb+nf)/Math.max(1,frames.length))); $('pTxt').textContent=`unatrag: ${nb} sličica, naprijed: ${nf} sličica, širina ${fmt(W,0)} px`};
     await frameDone();
     const back=ctl.cancel?[]:await trackDir(frames,box,ref.i,rect,-1,ctl);
@@ -667,7 +676,7 @@ async function startMeasure(t0,rect,veh,refRoiIn){
     }
     result=finishMeasure(pts,rect,frames[ref.i].t,ctl.cancel,{reg,regErr,veh});
   }catch(e){ $('pTxt').textContent='Greška: '+e.message; console.error(e); await sleep(2500) }
-  $('ovProg').classList.remove('on'); V.classList.remove('full');
+  $('ovProg').classList.remove('on'); V.classList.remove('full'); wakeOff(); clearInterval(ctl&&ctl.tick);
   try{ await seekTo(t0); curT=t0; drawView(); }catch(e){}
   return result;
 }
@@ -828,7 +837,7 @@ function sameVehicle(a,b){
 async function scanVehicles(){
   if(!vw){alert('Najprije učitajte snimku.');return}
   if(scanning||offerRun) return;
-  scanning=true; $('btnScan').disabled=true; vehicles=[]; renderVeh(); showScreen('none');
+  scanning=true; wakeOn(); $('btnScan').disabled=true; vehicles=[]; renderVeh(); showScreen('none');
   ctl={cancel:false};
   const cv=$('scanBoxes'), cx=cv.getContext('2d'); cv.width=innerWidth; cv.height=innerHeight;
   const gsc=Math.min(cv.width/vw,cv.height/vh), gox=(cv.width-vw*gsc)/2, goy=(cv.height-vh*gsc)/2;
@@ -885,7 +894,7 @@ async function scanVehicles(){
   V.classList.remove('full'); $('ovScan').classList.add('hide');
   const cancelled=ctl.cancel;
   try{ await seekTo(0); curT=0; drawView(); }catch(e){}
-  scanning=false; $('btnScan').disabled=false;
+  scanning=false; wakeOff(); $('btnScan').disabled=false;
   if(err){ console.error(err); $('vehInfo').textContent='Greška pri traženju vozila: '+err.message; showScreen('res'); return }
   vehicles=approachingTracks(trk.tr); renderVeh();
   const secs=Math.round((performance.now()-t0w)/1000);

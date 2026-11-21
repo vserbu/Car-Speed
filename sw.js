@@ -7,6 +7,6 @@ self.addEventListener('fetch',e=>{
   if(BIG.test(r.url)){
     e.respondWith(caches.open(C).then(c=>c.match(r).then(h=>h||fetch(r).then(n=>{ if(n.ok) c.put(r,n.clone()); return n }))));
   }else{
-    e.respondWith(fetch(r).then(n=>{ if(n.ok){const cp=n.clone(); caches.open(C).then(c=>c.put(r,cp))} return n }).catch(()=>caches.match(r)));
+    e.respondWith(fetch(r,{cache:'no-store'}).then(n=>{ if(n.ok){const cp=n.clone(); caches.open(C).then(c=>c.put(r,cp))} return n }).catch(()=>caches.match(r)));
   }
 });

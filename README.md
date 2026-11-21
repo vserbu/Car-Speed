@@ -3,7 +3,7 @@
 Mjerenje brzine vozila iz videa pomoću širine hrvatske (EU) registarske pločice (520 mm).
 Radi u pregledniku (GitHub Pages), sve se obrađuje na uređaju.
 
-**Trenutna verzija: 0.4.3 beta**
+**Trenutna verzija: 0.4.4 beta**
 Verzija je ispisana na prvoj stranici aplikacije (ispod gumba). Uz svaku promjenu raste broj verzije i dopisuje se ovdje.
 
 ## Datoteke u repozitoriju
@@ -23,6 +23,11 @@ Verzija je ispisana na prvoj stranici aplikacije (ispod gumba). Uz svaku promjen
 4. Mjerenje (video se polako reproducira uz traku napretka), zatim ekran s rezultatima i popisom (CSV izvoz).
 
 ## Povijest promjena
+
+### 0.4.4 beta
+- Tipka **📋 Log** (gore desno, vidljiva na svakom zaslonu): dnevnik rada s podacima o uređaju i stanju videa, tipka Kopiraj za slanje na analizu.
+- Prije svakog sljedećeg mjerenja video se ponovno učitava iz odabrane datoteke (svjež dekoder) – pokušaj uklanjanja zapinjanja na "0 sličica".
+- Dijagnostika čitanja sličica u logu (stanje videa svake 2 s).
 
 ### 0.4.3 beta
 - Popravljeno zapinjanje kod drugog i sljedećih mjerenja ("0 sličica pročitano"): premotavanje na početak isječka ima vremensko ograničenje, a ako 3 s nakon pokretanja nema sličica, reprodukcija se automatski ponovno pokreće (uz rezervno čitanje preko rAF-a).

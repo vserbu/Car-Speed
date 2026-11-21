@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111418">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Brzina vozila 0.4.3 beta</title>
+<title>Brzina vozila 0.4.4 beta</title>
 <style>
   :root{--bg:#111418;--card:#1b2027;--line:#2c343f;--fg:#e8edf2;--mut:#93a0ad;--acc:#4ea1ff;--ok:#3ecf8e;--warn:#ffb454;--bad:#ff6b6b}
   *{box-sizing:border-box}
@@ -85,6 +85,12 @@
   .mSide{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px}
   .mSide button{width:52px;height:52px;min-height:52px;padding:0;font-size:24px;background:#000b}
   #mToast{position:absolute;left:50%;top:42%;transform:translateX(-50%);background:#000d;color:#fff;padding:10px 16px;border-radius:10px;pointer-events:none;z-index:2}
+  #btnLog{position:fixed;right:6px;top:6px;z-index:300;min-height:0;padding:4px 8px;font-size:12px;opacity:.55;background:#000a;border:1px solid #fff4;color:#fff;border-radius:8px}
+  #logPanel{position:fixed;inset:0;z-index:400;background:#0b0f14;display:flex;flex-direction:column;padding:8px}
+  #logPanel.hide{display:none}
+  .lpTop{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+  .lpTop button{min-height:40px;padding:6px 10px}
+  #logTa{flex:1;width:100%;background:#000;color:#cfe;font:11px/1.35 monospace;border:1px solid #333;border-radius:8px;padding:6px;resize:none}
   .veh{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
   .veh .vt{flex:1 1 auto;min-width:0}
   .veh .vt b{display:block}
@@ -106,7 +112,7 @@
     <label class="btn big">📁 Odaberi video
       <input id="inFile" type="file" accept="video/*" hidden>
     </label>
-    <div style="font-size:11px;color:#6b7785;margin-top:6px">verzija 0.4.3 beta</div>
+    <div style="font-size:11px;color:#6b7785;margin-top:6px">verzija 0.4.4 beta</div>
   </section>
 
   <!-- NAKON OBRADE: pregled, rezultati, popis -->
@@ -193,6 +199,13 @@
 
 <video id="vid" muted playsinline preload="auto"></video>
 
+<button id="btnLog" title="Dnevnik (log)">📋 Log</button>
+<div id="logPanel" class="hide">
+  <div class="lpTop"><b>Log</b><span>
+    <button id="logCopy" class="pri">Kopiraj</button><button id="logClr">Obriši</button><button id="logX">Zatvori</button></span></div>
+  <textarea id="logTa" readonly></textarea>
+</div>
+
 <!-- Označavanje preko cijelog zaslona: 1) zum, 2) pravokutnik -->
 <div id="scrMark" class="hide">
   <canvas id="mc"></canvas>
@@ -229,6 +242,12 @@
 
 <script>
 "use strict";
+const APP_VER='0.4.4 beta';
+const LOGS=[]; const T0L=performance.now();
+function L(...a){ const t=((performance.now()-T0L)/1000).toFixed(2); const m=a.map(x=>{ if(x instanceof Error) return x.message; if(typeof x==='object'){ try{return JSON.stringify(x)}catch(e){return String(x)} } return String(x) }).join(' '); LOGS.push(`[${t}] ${m}`); if(LOGS.length>1500) LOGS.splice(0,300) }
+for(const k of ['log','warn','error']){ const o=console[k].bind(console); console[k]=(...a)=>{ L(k.toUpperCase()+':',...a); o(...a) } }
+addEventListener('error',e=>L('GREŠKA:',e.message,(e.filename||'').split('/').pop()+':'+e.lineno));
+addEventListener('unhandledrejection',e=>L('ODBIJENO OBEĆANJE:',e.reason&&e.reason.message||e.reason));
 const $=id=>document.getElementById(id);
 const V=$('vid'), view=$('view'), vctx=view.getContext('2d');
 const EU_PLATE_M=0.52;
@@ -249,6 +268,16 @@ function curF(){ // f u pikselima za trenutnu rezoluciju
 }
 
 /* ---------- učitavanje videa ---------- */
+let srcFile=null, measN=0;
+function vstate(){ return `rs=${V.readyState} ns=${V.networkState} t=${V.currentTime.toFixed(2)} paused=${V.paused} rate=${V.playbackRate} err=${V.error?V.error.code:'-'}` }
+async function reloadVideo(){       // svjež dekoder/video prije svakog sljedećeg mjerenja
+  if(!srcFile) return; L('reloadVideo: start,',vstate());
+  try{V.pause()}catch(e){}
+  V.onloadedmetadata=null; V.onerror=null; V.onseeked=null; V.removeAttribute('src'); V.load();
+  if(srcURL) URL.revokeObjectURL(srcURL); srcURL=URL.createObjectURL(srcFile);
+  await new Promise(r=>{ let d=false; const f=()=>{ if(d) return; d=true; r() }; V.onloadeddata=f; setTimeout(f,8000); V.src=srcURL; V.load() });
+  V.onloadeddata=null; await sleep(200); L('reloadVideo: gotovo,',vstate());
+}
 function loadBlob(blob,name){
   try{ V.pause() }catch(e){}
   V.onloadedmetadata=null; V.onerror=null; V.removeAttribute('src'); V.load();      // oslobodi dekoder prethodnog videa
@@ -349,11 +378,11 @@ document.querySelectorAll('[data-step]').forEach(b=>b.addEventListener('click',(
 /* ---------- unos videa ---------- */
 async function onFile(f){
   if(!f) return;
-  $('vinfo').textContent='Učitavam…'; srcSize=f.size||0;
+  $('vinfo').textContent='Učitavam…'; srcSize=f.size||0; srcFile=f; measN=0; L('onFile:',f.name,f.type,((f.size||0)/1048576).toFixed(1)+' MB');
   vehicles=[]; renderVeh(); $('vehInfo').textContent=''; lastResult=null;
   try{ try{await loadBlob(f,f.name||'snimka')}catch(e1){ console.warn(e1); await sleep(700); await loadBlob(f,f.name||'snimka') } }
   catch(e){ alert('Video se ne može učitati: '+e.message+'\nZatvorite druge kartice/aplikacije koje koriste kameru ili video i pokušajte ponovno.'); showScreen('start'); return }
-  showScreen('none'); scanVehicles();
+  showScreen('none'); L('video učitan:',qualityText()); scanVehicles();
 }
 function showScreen(n){ $('scrStart').classList.toggle('hide',n!=='start'); $('scrRes').classList.toggle('hide',n!=='res'); window.scrollTo(0,0) }  // 'none' = sve skriveno (traženje/označavanje/mjerenje)
 $('btnNew').addEventListener('click',()=>{ if(scanning||offerRun||mk) return; try{V.pause()}catch(e){} showScreen('start') });
@@ -565,14 +594,19 @@ async function captureFrames(tS,tE,box,ctl){
       frames.push({t,g});
       ctl.onCap&&ctl.onCap(frames.length,(t-tS)/(tE-tS||1));
     };
-    const stop=(why)=>{window.__stop=[why,V.currentTime,V.ended,ctl.cancel,tE,performance.now()];try{V.pause()}catch(e){} res()};
+    const stop=(why)=>{clearInterval(ctl.diag); L('capture stop:',why||'','frames='+frames.length,vstate()); window.__stop=[why,V.currentTime,V.ended,ctl.cancel,tE,performance.now()];try{V.pause()}catch(e){} res()};
+    V.addEventListener('ended',()=>stop('ended'),{once:true});
     const cb=(now,m)=>{ take(m.mediaTime); if(m.mediaTime>=tE||ctl.cancel||V.ended) stop('cb'); else V.requestVideoFrameCallback(cb) };
-    const cbRaf=()=>{ take(V.currentTime); if(V.currentTime>=tE||ctl.cancel||V.ended) stop(); else requestAnimationFrame(cbRaf) };
-    try{await V.play()}catch(e){res();return}
+    const cbRaf=()=>{ if(!ctl.fallbackLogged){ctl.fallbackLogged=1;L('rAF rezervno čitanje')} take(V.currentTime); if(V.currentTime>=tE||ctl.cancel||V.ended) stop(); else requestAnimationFrame(cbRaf) };
+    L('captureFrames: tS='+tS.toFixed(2)+' tE='+tE.toFixed(2)+' rVFC='+!!V.requestVideoFrameCallback+' '+vstate());
+    const diag=setInterval(()=>L('capture: frames='+frames.length+' '+vstate()),2000); ctl.diag=diag;
+    try{await V.play()}catch(e){L('play() odbijen:',e);clearInterval(diag);res();return}
+    L('play() ok '+vstate());
     if(V.requestVideoFrameCallback) V.requestVideoFrameCallback(cb); else requestAnimationFrame(cbRaf);
     // ako nakon 3 s nema nijedne sličice: ponovno pokreni reprodukciju, pa (ako treba) čitaj preko rAF-a
     setTimeout(async()=>{
       if(frames.length||ctl.cancel) return;
+      L('nema sličica nakon 3 s – ponovno pokrećem',vstate());
       try{ V.pause(); await seekTo2(Math.max(0,tS)); await sleep(150); V.playbackRate=ctl.rate||0.5; await V.play(); if(V.requestVideoFrameCallback) V.requestVideoFrameCallback(cb); }catch(e){}
       setTimeout(()=>{ if(!frames.length&&!ctl.cancel){ ctl.fallback=true; requestAnimationFrame(cbRaf) } },3000);
     },3000);
@@ -654,7 +688,10 @@ function speedOf(pts,f,wmin){
 /* ---------- mjerenje ---------- */
 let ctl=null;
 async function startMeasure(t0,rect,veh,refRoiIn){
-  ctl={cancel:false,rate:0.25}; wakeOn(); V.classList.add('full'); $('ovProg').classList.add('on'); $('pBar').value=0;
+  ctl={cancel:false,rate:0.25}; wakeOn(); V.classList.add('full'); $('ovProg').classList.add('on'); $('pTitle').textContent='Pripremam video…'; $('pTxt').textContent='';
+  if(measN++>0){ try{ await reloadVideo() }catch(e){ L('reloadVideo greška',e) } }
+  L('startMeasure: t0='+t0.toFixed(2)+' rect='+[rect.cx,rect.cy,rect.w,rect.h].map(x=>Math.round(x)).join(',')+' '+vstate());
+  $('ovProg').classList.add('on'); $('pBar').value=0;
   $('pTitle').textContent='1/3 · Čitam sličice videa (reproducira se polako)…'; $('pTxt').textContent='';
   const t1=performance.now(); let result=null;
   const refRoi=refRoiIn||grab(rect.cx-rect.w*1.5,rect.cy-rect.h*6,rect.cx+rect.w*1.5,rect.cy+rect.h*6);  // spremljeni isječak (ponuda) ili sličica koja je sada prikazana
@@ -904,7 +941,7 @@ async function scanVehicles(){
   try{ await seekTo(0); curT=0; drawView(); }catch(e){}
   scanning=false; wakeOff(); $('btnScan').disabled=false;
   if(err){ console.error(err); $('vehInfo').textContent='Greška pri traženju vozila: '+err.message; showScreen('res'); return }
-  vehicles=approachingTracks(trk.tr); renderVeh();
+  vehicles=approachingTracks(trk.tr); renderVeh(); L('pretraga gotova: sličica='+nproc+' vozila='+vehicles.length+(cancelled?' (prekinuto)':''));
   const secs=Math.round((performance.now()-t0w)/1000);
   $('vehInfo').textContent=`Pretraženo ${nproc} sličica za ${secs} s${cancelled?' (prekinuto)':''}. Vozila koja prilaze: ${vehicles.length}.`+(vehicles.length?'':' Ako ste očekivali vozila, uključite „cijela visina slike“ u postavkama ili označite pločicu ručno ispod.');
   if(vehicles.length&&!cancelled) runOffers(); else showScreen('res');
@@ -1117,6 +1154,16 @@ $('btnExport').addEventListener('click',async()=>{
   await seekTo(r.t0); drawView();
 });
 
+function logText(){
+  const hdr=[`Brzina vozila ${APP_VER}`, navigator.userAgent, `RAM≈${navigator.deviceMemory||'?'} GB, jezgri=${navigator.hardwareConcurrency||'?'}, ekran ${innerWidth}x${innerHeight}@${devicePixelRatio}`,
+    vw?`video: ${srcName} ${vw}x${vh} ${dur.toFixed(1)} s dt=${dt.toFixed(4)} ${srcFile?srcFile.type+' '+(srcFile.size/1048576).toFixed(0)+' MB':''}`:'video: nije učitan', 'stanje: '+(vw?vstate():'-'), 'mjerenja u ovoj sesiji: '+measN,'---'];
+  return hdr.join('\n')+'\n'+LOGS.join('\n');
+}
+$('btnLog').addEventListener('click',()=>{ $('logTa').value=logText(); $('logPanel').classList.remove('hide'); $('logTa').scrollTop=1e9 });
+$('logX').addEventListener('click',()=>$('logPanel').classList.add('hide'));
+$('logClr').addEventListener('click',()=>{ LOGS.length=0; $('logTa').value=logText() });
+$('logCopy').addEventListener('click',async()=>{ const ta=$('logTa'); ta.value=logText(); try{ await navigator.clipboard.writeText(ta.value); $('logCopy').textContent='Kopirano ✓' }catch(e){ ta.select(); try{document.execCommand('copy'); $('logCopy').textContent='Kopirano ✓'}catch(e2){ $('logCopy').textContent='Označi i kopiraj ručno' } } setTimeout(()=>$('logCopy').textContent='Kopiraj',2500) });
+L('start',APP_VER);
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 /* pomoćnik za automatsko testiranje */

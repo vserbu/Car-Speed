@@ -62,6 +62,25 @@
   #camPrev{width:100%;background:#000;border-radius:8px;max-height:60vh}
   .hide{display:none!important}
   details summary{cursor:pointer;color:var(--mut);padding:6px 0}
+  #scrStart{min-height:92vh;display:flex;flex-direction:column;justify-content:center;gap:18px;text-align:center}
+  #scrStart h1{font-size:30px;margin:0 0 14px}
+  .btn.big{font-size:22px;min-height:100px;width:100%;border-radius:16px}
+  .resHead{display:flex;align-items:center;gap:10px;justify-content:space-between}
+  .resHead button{min-height:40px;padding:8px 12px}
+  #scrMark{position:fixed;inset:0;z-index:70;background:#000;user-select:none;-webkit-user-select:none}
+  #mc{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+  .mTop,.mBot{position:absolute;left:0;right:0;pointer-events:none;padding:10px 12px}
+  .mTop{top:0;padding-top:max(10px,env(safe-area-inset-top));background:linear-gradient(#000e,#0000)}
+  .mBot{bottom:0;padding-bottom:max(10px,env(safe-area-inset-bottom));background:linear-gradient(#0000,#000e 30%)}
+  #mTitle{font-weight:700}
+  #mQual{font-size:12px;color:#aab6c2}
+  #mStep{font-size:14px;color:#fff;margin-top:4px}
+  #mInfo{font-size:13px;color:#dfe7ee;min-height:18px}
+  .mRow{display:flex;gap:8px;margin-top:8px;pointer-events:auto}
+  .mRow button{flex:1 1 0;min-height:50px;padding:8px 6px}
+  .mSide{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px}
+  .mSide button{width:52px;height:52px;min-height:52px;padding:0;font-size:24px;background:#000b}
+  #mToast{position:absolute;left:50%;top:42%;transform:translateX(-50%);background:#000d;color:#fff;padding:10px 16px;border-radius:10px;pointer-events:none;z-index:2}
   .veh{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
   .veh .vt{flex:1 1 auto;min-width:0}
   .veh .vt b{display:block}
@@ -74,55 +93,34 @@
 </head>
 <body>
 <main>
-  <h1>Brzina vozila</h1>
-  <div class="sub">Mjerenje iz širine registarske pločice (EU, 520 mm). Snimi → označi pločicu prstom → brzina. Točnost otprilike ±10 %.</div>
+  <!-- PRVA STRANICA: samo dva izbora -->
+  <section id="scrStart">
+    <h1>Brzina vozila</h1>
+    <label class="btn pri big">🎥 Snimi video
+      <input id="inCam" type="file" accept="video/*" capture="environment" hidden>
+    </label>
+    <label class="btn big">📁 Odaberi video
+      <input id="inFile" type="file" accept="video/*" hidden>
+    </label>
+  </section>
 
-  <!-- 1. VIDEO -->
-  <div class="card">
-    <h2>1 · Snimka</h2>
-    <div class="row">
-      <label class="btn pri">🎥 Snimi kamerom
-        <input id="inCam" type="file" accept="video/*" capture="environment" hidden>
-      </label>
-      <label class="btn">📁 Odaberi video
-        <input id="inFile" type="file" accept="video/*" hidden>
-      </label>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button id="btnRec">⏺ Snimi u ovoj stranici (pokus)</button>
-    </div>
-    <div id="vinfo" class="info" style="margin-top:8px">Nema učitane snimke. „Snimi kamerom“ otvara običnu kameru telefona (preporučeno: snimajte u 4K, 30 ili 60 fps).</div>
-  </div>
+  <!-- NAKON OBRADE: pregled, rezultati, popis -->
+  <section id="scrRes" class="hide">
+    <div class="resHead"><h1>Brzina vozila</h1><button id="btnNew">⟲ Novi video</button></div>
+    <div id="vinfo" class="info"></div>
 
   <!-- 2. VOZILA (automatsko traženje) -->
   <div class="card" id="cardVeh">
-    <h2>2 · Vozila koja prilaze</h2>
-    <div class="row nf"><button id="btnScan" class="pri">🔍 Traži vozila</button></div>
-    <div id="vehInfo" class="info" style="margin-top:8px">Nakon učitavanja snimke aplikacija sama traži vozila koja prilaze i za svako ponudi sličicu na kojoj označite pločicu.</div>
+    <h2>Vozila koja prilaze</h2>
+    <div class="row nf"><button id="btnScan" class="pri">🔍 Traži ponovno</button></div>
+    <div id="vehInfo" class="info" style="margin-top:8px"></div>
     <div id="vlist"></div>
-  </div>
-
-  <!-- 2b. RUČNO OZNAČI -->
-  <div class="card" id="cardMark">
-    <h2>Ručno: označi pločicu na bilo kojoj sličici</h2>
-    <div id="viewWrap">
-      <canvas id="view" width="640" height="360"></canvas>
-      <div id="viewHint">Listajte do sličice na kojoj se pločica jasno vidi, pa dodirnite pločicu.</div>
-    </div>
-    <input id="slider" type="range" min="0" max="1000" value="0">
-    <div class="row">
-      <button data-step="-10">◀◀ −10</button>
-      <button data-step="-1">◀ −1</button>
-      <button data-step="1">+1 ▶</button>
-      <button data-step="10">+10 ▶▶</button>
-    </div>
-    <div id="tinfo" class="info" style="margin-top:6px"></div>
   </div>
 
   <!-- 3. REZULTAT -->
   <div class="card" id="cardRes">
-    <h2>3 · Rezultat</h2>
-    <div id="resEmpty" class="info">Označite pločicu na sličici gdje je jasno vidljiva (najbolje kad je vozilo blizu, pločica ≥ 80 px široka).</div>
+    <h2>Rezultat</h2>
+    <div id="resEmpty" class="info">Rezultat se pojavi nakon što označite pločicu.</div>
     <div id="resBox" class="hide">
       <div class="big"><span id="rSpeed">–</span> <small>km/h</small></div>
       <div id="rNote" class="info"></div>
@@ -154,6 +152,24 @@
 
   <div class="card">
     <details>
+      <summary>Ručni odabir sličice (ako automatsko traženje ne nađe vozilo)</summary>
+      <div id="viewWrap">
+        <canvas id="view" width="640" height="360"></canvas>
+        <div id="viewHint">Listajte do sličice na kojoj se pločica jasno vidi, pa dodirnite pločicu.</div>
+      </div>
+      <input id="slider" type="range" min="0" max="1000" value="0">
+      <div class="row">
+        <button data-step="-10">◀◀ −10</button>
+        <button data-step="-1">◀ −1</button>
+        <button data-step="1">+1 ▶</button>
+        <button data-step="10">+10 ▶▶</button>
+      </div>
+      <div id="tinfo" class="info" style="margin-top:6px"></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <details>
       <summary>Postavke i kalibracija</summary>
       <div class="row">
         <div><div class="info">Brzina snimanja (sličica/s)</div>
@@ -164,44 +180,39 @@
       <div class="info" style="margin-top:6px">Zadano 2900 px vrijedi okvirno za Samsung A53/A54 (glavna kamera, 4K). Za bolju točnost: snimite auto na poznatoj udaljenosti (npr. 10 m), kliknite „Kalibriraj“ pa označite pločicu na toj snimci.</div>
       <div class="row nf" style="margin-top:6px"><button id="btnCal">📐 Kalibriraj iz označene pločice…</button><button id="btnCalReset">Vrati zadano</button></div>
       <div id="calInfo" class="info" style="margin-top:6px"></div>
-      <label class="chk"><input type="checkbox" id="chkAuto" checked> Nakon učitavanja snimke automatski traži vozila</label>
       <label class="chk"><input type="checkbox" id="chkFull"> Traži vozila po cijeloj visini slike (zadano samo srednji pojas, kao u računalnom programu)</label>
     </details>
   </div>
+  </section>
 </main>
 
 <video id="vid" muted playsinline preload="auto"></video>
 
-<!-- Zoom za označavanje -->
-<div id="ovMark" class="overlay"><div class="panel">
-  <div class="info" id="zHint">Povucite pravokutnik oko pločice – od ruba do ruba (i plavi pojas lijevo). Bijele točke na rubovima mijenjaju veličinu, a povlačenje unutar okvira ga pomiče. Tipke ispod služe za fino namještanje.</div>
-  <div id="zoomWrap"><canvas id="zoom" width="800" height="600"></canvas></div>
-  <div class="info" id="zInfo" style="margin:6px 0">Povucite prstom po slici.</div>
-  <div class="row nf">
-    <button data-nudge="l">◀</button><button data-nudge="r">▶</button><button data-nudge="u">▲</button><button data-nudge="d">▼</button>
-    <button data-nudge="w-">uži</button><button data-nudge="w+">šire</button>
-    <button id="zOut">🔍−</button><button id="zIn">🔍+</button>
-  </div>
-  <div id="offerRow" class="hide">
-    <div class="row nf" style="margin-top:8px">
-      <button data-ostep="-5">◀◀ −5</button><button data-ostep="-1">◀ −1</button>
-      <button data-ostep="1">+1 ▶</button><button data-ostep="5">+5 ▶▶</button>
+<!-- Označavanje preko cijelog zaslona: 1) zum, 2) pravokutnik -->
+<div id="scrMark" class="hide">
+  <canvas id="mc"></canvas>
+  <div class="mTop"><div id="mTitle"></div><div id="mQual"></div><div id="mStep"></div></div>
+  <div class="mSide"><button id="mZin">＋</button><button id="mZout">－</button><button id="mFit" title="Cijela fotka">⤢</button><button id="mTarget" title="Zumiraj na pločicu">◎</button></div>
+  <div id="mToast" class="hide"></div>
+  <div class="mBot">
+    <div id="mInfo"></div>
+    <div class="mRow" id="mNav">
+      <button data-mstep="-5">◀◀</button><button data-mstep="-1">◀</button><button data-mstep="1">▶</button><button data-mstep="5">▶▶</button>
+      <button id="mNew" style="flex:2 1 0">📷 Ponudi novu fotku</button>
     </div>
-    <div class="row" style="margin-top:8px">
-      <button id="oLater">Pločica se ne vidi – pokušaj kasnije</button>
-      <button id="oSkip">Preskoči vozilo</button>
+    <div class="mRow">
+      <button id="mSkip" class="bad">Preskoči vozilo</button>
+      <button id="mStop">Prekini</button>
+      <button id="mBack" class="hide">← Zoom</button>
+      <button id="mNext" class="pri" style="flex:2 1 0">Potvrdi zoom →</button>
     </div>
   </div>
-  <div class="row" style="margin-top:8px">
-    <button id="zCancel">Odustani</button>
-    <button id="zOk" class="pri" disabled>OK – izmjeri</button>
-  </div>
-</div></div>
+</div>
 
 <!-- Traženje vozila: video preko cijelog zaslona + slojevi s podacima -->
 <div id="ovScan" class="hide">
   <canvas id="scanBoxes"></canvas>
-  <div class="scanTop"><div id="scanTitle">Tražim vozila…</div><progress id="scanBar" value="0" max="100"></progress><div id="scanTxt" style="font-size:13px;color:#dfe7ee"></div></div>
+  <div class="scanTop"><div id="scanTitle">Tražim vozila…</div><div id="scanQual" style="font-size:13px;color:#dfe7ee;margin-bottom:6px"></div><progress id="scanBar" value="0" max="100"></progress><div id="scanTxt" style="font-size:13px;color:#dfe7ee"></div></div>
   <div class="scanBot"><div id="scanNums"></div><button id="scanCancel" class="bad">Prekini</button></div>
 </div>
 
@@ -211,17 +222,6 @@
   <progress id="pBar" value="0" max="100"></progress>
   <div id="pTxt" class="info" style="margin:6px 0"></div>
   <button id="pCancel" class="bad">Prekini</button>
-</div></div>
-
-<!-- Snimanje u stranici -->
-<div id="ovRec" class="overlay"><div class="panel">
-  <video id="camPrev" muted playsinline autoplay></video>
-  <div id="camInfo" class="info" style="margin:6px 0">Pokrećem kameru…</div>
-  <div class="row">
-    <button id="camStart" class="pri">⏺ Počni snimati</button>
-    <button id="camStop" class="hide bad">⏹ Zaustavi</button>
-    <button id="camClose">Zatvori</button>
-  </div>
 </div></div>
 
 <script>
@@ -266,11 +266,13 @@ function loadBlob(blob,name){
     V.onerror=()=>rej(new Error('Preglednik ne može otvoriti ovaj video (kodek?)'));
   });
 }
+let srcSize=0;
+function qualityLabel(){ const L=Math.max(vw,vh); return L>=3800?'4K UHD':L>=2500?'QHD (2K)':L>=1900?'Full HD':L>=1250?'HD':'SD (niska)' }
+function qualityText(){ return vw?`${qualityLabel()} · ${vw}×${vh} · ≈${fmt(1/dt,0)} sl/s · ${fmt(dur,1)} s`+(srcSize?` · ${(srcSize/1048576).toFixed(0)} MB`:''):'' }
 function updateInfo(){
-  $('vinfo').textContent=`${srcName}: ${vw}×${vh}, ${fmt(dur,1)} s, ≈${fmt(1/dt,0)} sl/s, f≈${fmt(curF(),0)} px`;
+  $('vinfo').textContent=`${srcName}: ${qualityText()} · f≈${fmt(curF(),0)} px`;
   $('tinfo').textContent=`t = ${fmt(curT,3)} s / ${fmt(dur,2)} s`;
-  const w=Math.max(vw,vh)>=3600?'':'  ⚠ Snimka nije u 4K – točnost mjerenja na većoj udaljenosti bit će lošija.';
-  if(w) $('vinfo').textContent+=w;
+  if(Math.max(vw,vh)<3600) $('vinfo').textContent+='  ⚠ Snimka nije u 4K – točnost mjerenja na većoj udaljenosti bit će lošija.';
 }
 async function detectFps(){
   const sel=$('fpsSel').value;
@@ -338,117 +340,148 @@ document.querySelectorAll('[data-step]').forEach(b=>b.addEventListener('click',(
 /* ---------- unos videa ---------- */
 async function onFile(f){
   if(!f) return;
-  $('vinfo').textContent='Učitavam…';
-  vehicles=[]; renderVeh(); $('vehInfo').textContent='';
-  try{await loadBlob(f,f.name||'snimka')}catch(e){$('vinfo').textContent='Greška: '+e.message; return}
-  if($('chkAuto').checked) scanVehicles();
-  else $('vehInfo').textContent='Pritisnite „Traži vozila“ ili označite pločicu ručno.';
+  $('vinfo').textContent='Učitavam…'; srcSize=f.size||0;
+  vehicles=[]; renderVeh(); $('vehInfo').textContent=''; lastResult=null;
+  try{await loadBlob(f,f.name||'snimka')}catch(e){ alert('Video se ne može učitati: '+e.message); return }
+  showScreen('res'); scanVehicles();
 }
+function showScreen(n){ $('scrStart').classList.toggle('hide',n!=='start'); $('scrRes').classList.toggle('hide',n!=='res'); window.scrollTo(0,0) }
+$('btnNew').addEventListener('click',()=>{ if(scanning||offerRun||mk) return; try{V.pause()}catch(e){} showScreen('start') });
 $('inCam').addEventListener('change',e=>{onFile(e.target.files[0]);e.target.value=''});
 $('inFile').addEventListener('change',e=>{onFile(e.target.files[0]);e.target.value=''});
 $('fpsSel').addEventListener('change',()=>{ if(vw){ if($('fpsSel').value==='auto') detectFps().then(updateInfo); else {dt=1/parseFloat($('fpsSel').value);updateInfo()} } });
 $('fIn').addEventListener('change',()=>{updateInfo(); try{localStorage.removeItem('fnorm')}catch(e){}});
 
-/* ---------- označavanje: dodir -> zoom -> pravokutnik ---------- */
-const zoom=$('zoom'), zctx=zoom.getContext('2d');
-let zs=null; // {sx,sy,zw,zh,k, rect:{x,y,w,h} u izvornim px, base}
-function openZoom(cx,cy){
-  const base=Math.max(150,Math.round(vw*0.06));
-  zs={cx,cy,zf:1,base,rect:null};
-  $('zOk').disabled=true; $('zInfo').textContent='Povucite prstom po slici.';
-  $('ovMark').classList.add('on'); zoomLayout(); zoomDraw();
+/* ---------- označavanje preko cijelog zaslona: 1) zum, 2) pravokutnik ---------- */
+const mc=$('mc'), mctx=mc.getContext('2d');
+const HANDLES=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+let mk=null, tapStart=null;
+const hpos=(r,h)=>({x:r.x+(h[0]+1)/2*r.w, y:r.y+(h[1]+1)/2*r.h});
+const clampK=k=>Math.min(24,Math.max(0.05,k));
+function mkPt(e){const b=mc.getBoundingClientRect(); return {x:(e.clientX-b.left)*mc.width/b.width, y:(e.clientY-b.top)*mc.height/b.height}}
+const mkVid=q=>({x:mk.vx+q.x/mk.k, y:mk.vy+q.y/mk.k});
+function mkSize(){ const d=Math.min(devicePixelRatio||1,2), w=Math.round(innerWidth*d), h=Math.round(innerHeight*d); if(mc.width!==w||mc.height!==h){mc.width=w;mc.height=h} mk.d=d }
+function mkOpen(o){
+  mk=Object.assign({phase:'zoom',ptrs:new Map(),drag:null,pinch:null,busy:false,rect:null,img:null,k:1,vx:0,vy:0,fit:null},o);
+  $('scrMark').classList.remove('hide'); mkSize(); $('mQual').textContent=qualityText();
 }
-function zoomLayout(){
-  const zw=Math.round(zs.base*zs.zf), zh=Math.round(zw*0.75);
-  let sx=Math.round(zs.cx-zw/2), sy=Math.round(zs.cy-zh/2);
-  sx=Math.max(0,Math.min(vw-zw,sx)); sy=Math.max(0,Math.min(vh-zh,sy));
-  zs.sx=sx; zs.sy=sy; zs.zw=zw; zs.zh=zh; zs.k=zoom.width/zw;
-  zoom.height=Math.round(zoom.width*zh/zw);
+function mkPhoto(img,imgX,imgY,preset,fit){
+  mk.img=img; mk.imgX=imgX; mk.imgY=imgY; mk.rect=preset||null; mk.fit=fit||null; mk.phase='zoom';
+  mkFit(); mkUi(); mkRender();
 }
-function zoomDraw(){
-  zctx.imageSmoothingEnabled=true;
-  if(zs.img){   // ponuda: spremljeni isječak sličice na kojoj je vozilo otkriveno (ne ovisi o pomicanju videa)
-    zctx.fillStyle='#000'; zctx.fillRect(0,0,zoom.width,zoom.height);
-    const im=zs.img, sx0=zs.sx-zs.imgX, sy0=zs.sy-zs.imgY, ix0=Math.max(0,sx0), iy0=Math.max(0,sy0), ix1=Math.min(im.width,sx0+zs.zw), iy1=Math.min(im.height,sy0+zs.zh);
-    if(ix1>ix0&&iy1>iy0) zctx.drawImage(im,ix0,iy0,ix1-ix0,iy1-iy0,(ix0-sx0)*zs.k,(iy0-sy0)*zs.k,(ix1-ix0)*zs.k,(iy1-iy0)*zs.k);
-  }else zctx.drawImage(V,zs.sx,zs.sy,zs.zw,zs.zh,0,0,zoom.width,zoom.height);
-  const r=zs.rect;
-  if(r){
-    zctx.strokeStyle='#3ecf8e'; zctx.lineWidth=2;
-    zctx.strokeRect((r.x-zs.sx)*zs.k,(r.y-zs.sy)*zs.k,r.w*zs.k,r.h*zs.k);
-    if(r.w>1){ const hs=Math.max(7,zoom.width/60); zctx.fillStyle='#fff'; zctx.strokeStyle='#04111f'; zctx.lineWidth=1.5;
-      for(const h of HANDLES){const q=hpos(r,h), X=(q.x-zs.sx)*zs.k, Y=(q.y-zs.sy)*zs.k; zctx.fillRect(X-hs,Y-hs,2*hs,2*hs); zctx.strokeRect(X-hs,Y-hs,2*hs,2*hs)} }
+function mkFit(b){
+  b=b||mk.fit||{x:mk.imgX,y:mk.imgY,w:mk.img.width,h:mk.img.height};
+  const k=clampK(Math.min(mc.width/b.w,mc.height/b.h)*0.94);
+  mk.k=k; mk.vx=b.x+b.w/2-mc.width/(2*k); mk.vy=b.y+b.h/2-mc.height/(2*k); mkRender();
+}
+function mkZoomBy(f,cx,cy){
+  cx=cx??mc.width/2; cy=cy??mc.height/2; const ax=mk.vx+cx/mk.k, ay=mk.vy+cy/mk.k;
+  mk.k=clampK(mk.k*f); mk.vx=ax-cx/mk.k; mk.vy=ay-cy/mk.k; mkRender();
+}
+function mkRender(){
+  if(!mk||!mk.img) return; const c=mctx, k=mk.k, d=mk.d||1;
+  c.setTransform(1,0,0,1,0,0); c.fillStyle='#000'; c.fillRect(0,0,mc.width,mc.height);
+  c.imageSmoothingEnabled=true; c.setTransform(k,0,0,k,-mk.vx*k,-mk.vy*k); c.drawImage(mk.img,mk.imgX,mk.imgY); c.setTransform(1,0,0,1,0,0);
+  if(mk.phase==='mark'&&mk.rect){
+    const r=mk.rect; c.strokeStyle='#3ecf8e'; c.lineWidth=2*d; c.strokeRect((r.x-mk.vx)*k,(r.y-mk.vy)*k,r.w*k,r.h*k);
+    if(r.w>1){ c.fillStyle='#fff'; c.strokeStyle='#04111f'; c.lineWidth=1.5*d; const hs=7*d;
+      for(const h of HANDLES){const q=hpos(r,h),X=(q.x-mk.vx)*k,Y=(q.y-mk.vy)*k; c.fillRect(X-hs,Y-hs,2*hs,2*hs); c.strokeRect(X-hs,Y-hs,2*hs,2*hs)} }
   }
 }
-function zoomInfo(){
-  const r=zs.rect; if(!r) return;
-  $('zInfo').textContent=`Širina pločice: ${fmt(r.w,1)} px, visina ${fmt(r.h,1)} px (omjer ${fmt(r.w/r.h,1)}, očekivano ≈ 4,7)`;
-  $('zOk').disabled=false;
+function mkUi(){
+  const z=mk.phase==='zoom', offerM=mk.mode==='offer';
+  $('mStep').textContent=z?'1/2 · Zumirajte: jedan prst pomiče sliku, dva prsta (ili tipke ＋ −) zumiraju. Kad se pločica dobro vidi, potvrdite zoom.'
+    :'2/2 · Namjestite okvir na pločicu: povucite unutar okvira za pomak, bijele točke mijenjaju veličinu, a povlačenje izvan okvira crta novi.';
+  $('mNext').textContent=z?'Potvrdi zoom →':'OK – izmjeri';
+  $('mBack').classList.toggle('hide',z); $('mNav').classList.toggle('hide',!offerM); $('mSkip').classList.toggle('hide',!offerM);
+  $('mStop').textContent=offerM?'Prekini ponude':'Odustani'; $('mTarget').classList.toggle('hide',!mk.rect);
+  mkInfo();
 }
-function zpos(e){
-  const b=zoom.getBoundingClientRect();
-  return {x:zs.sx+(e.clientX-b.left)/b.width*zs.zw, y:zs.sy+(e.clientY-b.top)/b.height*zs.zh};
+function mkInfo(){
+  const r=mk.rect, ok=r&&r.w>1;
+  $('mInfo').textContent=mk.phase==='mark'?(ok?`Širina pločice: ${r.w.toFixed(1)} px · visina ${r.h.toFixed(1)} px · omjer ${(r.w/r.h).toFixed(1)} (očekivano ≈ 4,7)`:'Povucite prstom da nacrtate okvir oko pločice.'):'';
+  $('mNext').disabled=mk.phase==='mark'&&!ok;
 }
-let drag=null;
-const HANDLES=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
-function hpos(r,h){return {x:r.x+(h[0]+1)/2*r.w, y:r.y+(h[1]+1)/2*r.h}}
-function toClient(x,y){const b=zoom.getBoundingClientRect(); return {x:b.left+(x-zs.sx)/zs.zw*b.width, y:b.top+(y-zs.sy)/zs.zh*b.height}}
-function hitTest(e){   // vraća {mode:'h',h} za ručku, {mode:'move'} za unutrašnjost, null za izvan pravokutnika
-  const r=zs.rect; if(!r||r.w<=1) return null;
-  let best=null,bd=26;   // tolerancija u CSS pikselima (prst)
-  for(const h of HANDLES){const c=toClient(...Object.values(hpos(r,h))); const d=Math.hypot(c.x-e.clientX,c.y-e.clientY); if(d<bd){bd=d;best={mode:'h',h}}}
+function mkHit(q){
+  const r=mk.rect; if(!r||r.w<=1) return null; const d=mk.d, k=mk.k;
+  const tol=Math.min(30*d,0.45*Math.min(r.w,r.h)*k); let best=null,bd=tol;
+  for(const h of HANDLES){const c=hpos(r,h),X=(c.x-mk.vx)*k,Y=(c.y-mk.vy)*k,dd=Math.hypot(X-q.x,Y-q.y); if(dd<bd){bd=dd;best={mode:'h',h}}}
   if(best) return best;
-  const p=zpos(e); if(p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h) return {mode:'move'};
+  const p=mkVid(q), pad=22*d/k;      // dodir malo izvan okvira također ga pomiče (okvir na zaslonu može biti mali)
+  if(p.x>=r.x-pad&&p.x<=r.x+r.w+pad&&p.y>=r.y-pad&&p.y<=r.y+r.h+pad) return {mode:'move'};
   return null;
 }
-zoom.addEventListener('pointerdown',e=>{ if(!zs) return; zoom.setPointerCapture(e.pointerId); e.preventDefault();
-  const hit=hitTest(e), p=zpos(e);
-  if(hit&&hit.mode==='h') drag={mode:'h',h:hit.h};
-  else if(hit) drag={mode:'move',p0:p,r0:{...zs.rect}};
-  else { drag={mode:'new',p0:p}; zs.rect={x:p.x,y:p.y,w:1,h:1}; }
-  zoomDraw()});
-zoom.addEventListener('pointermove',e=>{ if(!drag||!zs) return; e.preventDefault(); const p=zpos(e), r=zs.rect;
-  if(drag.mode==='new'){
-    zs.rect={x:Math.min(drag.p0.x,p.x),y:Math.min(drag.p0.y,p.y),w:Math.max(1,Math.abs(p.x-drag.p0.x)),h:Math.max(1,Math.abs(p.y-drag.p0.y))};
-  }else if(drag.mode==='move'){
-    zs.rect={x:drag.r0.x+p.x-drag.p0.x,y:drag.r0.y+p.y-drag.p0.y,w:drag.r0.w,h:drag.r0.h};
-  }else{
-    let l=r.x,t=r.y,rt=r.x+r.w,bt=r.y+r.h; const [hx,hy]=drag.h;
+mc.addEventListener('pointerdown',e=>{
+  if(!mk||mk.busy) return; mc.setPointerCapture(e.pointerId); e.preventDefault();
+  const q=mkPt(e); mk.ptrs.set(e.pointerId,q);
+  if(mk.ptrs.size===2){ const [a,b]=[...mk.ptrs.values()], mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+    mk.pinch={d0:Math.hypot(a.x-b.x,a.y-b.y)||1,k0:mk.k,ax:mk.vx+mid.x/mk.k,ay:mk.vy+mid.y/mk.k}; mk.drag=null; return }
+  if(mk.ptrs.size>2) return;
+  if(mk.phase==='zoom'){ mk.drag={mode:'pan',x:q.x,y:q.y,vx0:mk.vx,vy0:mk.vy}; return }
+  const hit=mkHit(q), p=mkVid(q);
+  if(hit&&hit.mode==='h') mk.drag={mode:'h',h:hit.h};
+  else if(hit) mk.drag={mode:'move',p0:p,r0:{...mk.rect}};
+  else { mk.drag={mode:'new',p0:p}; mk.rect={x:p.x,y:p.y,w:1,h:1} }
+  mkRender();
+});
+mc.addEventListener('pointermove',e=>{
+  if(!mk||!mk.ptrs.has(e.pointerId)) return; e.preventDefault();
+  const q=mkPt(e); mk.ptrs.set(e.pointerId,q);
+  if(mk.pinch&&mk.ptrs.size===2){
+    const [a,b]=[...mk.ptrs.values()], mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2}, dd=Math.hypot(a.x-b.x,a.y-b.y)||1;
+    mk.k=clampK(mk.pinch.k0*dd/mk.pinch.d0); mk.vx=mk.pinch.ax-mid.x/mk.k; mk.vy=mk.pinch.ay-mid.y/mk.k; mkRender(); return }
+  const D=mk.drag; if(!D) return;
+  if(D.mode==='pan'){ mk.vx=D.vx0-(q.x-D.x)/mk.k; mk.vy=D.vy0-(q.y-D.y)/mk.k; mkRender(); return }
+  const p=mkVid(q), r=mk.rect;
+  if(D.mode==='new') mk.rect={x:Math.min(D.p0.x,p.x),y:Math.min(D.p0.y,p.y),w:Math.max(1,Math.abs(p.x-D.p0.x)),h:Math.max(1,Math.abs(p.y-D.p0.y))};
+  else if(D.mode==='move') mk.rect={x:D.r0.x+p.x-D.p0.x,y:D.r0.y+p.y-D.p0.y,w:D.r0.w,h:D.r0.h};
+  else{
+    let l=r.x,t=r.y,rt=r.x+r.w,bt=r.y+r.h; const [hx,hy]=D.h;
     if(hx<0) l=p.x; else if(hx>0) rt=p.x;
     if(hy<0) t=p.y; else if(hy>0) bt=p.y;
-    zs.rect={x:Math.min(l,rt),y:Math.min(t,bt),w:Math.max(1,Math.abs(rt-l)),h:Math.max(1,Math.abs(bt-t))};
-    if(hx<0&&l>rt||hx>0&&rt<l) drag.h=[-hx,hy];       // povučeno preko suprotnog ruba: zamijeni ručku
-    if(hy<0&&t>bt||hy>0&&bt<t) drag.h=[drag.h[0],-hy];
+    mk.rect={x:Math.min(l,rt),y:Math.min(t,bt),w:Math.max(1,Math.abs(rt-l)),h:Math.max(1,Math.abs(bt-t))};
+    if(hx<0&&l>rt||hx>0&&rt<l) D.h=[-hx,hy];       // povučeno preko suprotnog ruba: zamijeni ručku
+    if(hy<0&&t>bt||hy>0&&bt<t) D.h=[D.h[0],-hy];
   }
-  zoomDraw(); zoomInfo()});
-const endDrag=e=>{drag=null};
-zoom.addEventListener('pointerup',endDrag); zoom.addEventListener('pointercancel',endDrag);
-document.querySelectorAll('[data-nudge]').forEach(b=>b.addEventListener('click',()=>{
-  const r=zs&&zs.rect; if(!r) return; const n=b.dataset.nudge, a=r.w/r.h;
-  if(n==='l') r.x-=1; else if(n==='r') r.x+=1; else if(n==='u') r.y-=1; else if(n==='d') r.y+=1;
-  else if(n==='w+'){const cx=r.x+r.w/2,cy=r.y+r.h/2; r.w+=1; r.h=r.w/a; r.x=cx-r.w/2; r.y=cy-r.h/2}
-  else if(n==='w-'&&r.w>6){const cx=r.x+r.w/2,cy=r.y+r.h/2; r.w-=1; r.h=r.w/a; r.x=cx-r.w/2; r.y=cy-r.h/2}
-  zoomDraw(); zoomInfo();
-}));
-$('zIn').addEventListener('click',()=>{zs.zf=Math.max(0.4,zs.zf/1.4); keepZoom()});
-$('zOut').addEventListener('click',()=>{zs.zf=Math.min(6,zs.zf*1.4); keepZoom()});
-function keepZoom(){zoomLayout(); zoomDraw()}
-function closeMark(){ $('ovMark').classList.remove('on'); $('offerRow').classList.add('hide'); zs=null }
-$('zCancel').addEventListener('click',()=>{ closeMark(); calMode=false; if(offer){const o=offer; offer=null; o.resolve({kind:'stop'})} });
-$('zOk').addEventListener('click',()=>{
-  const r=zs.rect; const rect={cx:r.x+r.w/2,cy:r.y+r.h/2,w:r.w,h:r.h}; closeMark();
-  if(offer){const o=offer; offer=null; o.resolve({kind:'ok',rect,rec:o.rec}); return}
-  if(calMode){calMode=false; doCalibrate(rect)} else startMeasure(curT,rect);
+  mkRender(); mkInfo();
 });
-// dodir na glavnu sliku
-let tapStart=null;
+const mkUp=e=>{ if(!mk) return; mk.ptrs.delete(e.pointerId); if(mk.ptrs.size<2) mk.pinch=null; if(mk.ptrs.size===0) mk.drag=null; else if(mk.ptrs.size===1) mk.drag=null };
+mc.addEventListener('pointerup',mkUp); mc.addEventListener('pointercancel',mkUp);
+mc.addEventListener('wheel',e=>{ if(!mk) return; e.preventDefault(); const q=mkPt(e); mkZoomBy(e.deltaY<0?1.25:0.8,q.x,q.y) },{passive:false});
+addEventListener('resize',()=>{ if(mk&&mk.img){ const r=mk.rect; mkSize(); mkFit(); mk.rect=r; mkRender() } });
+$('mZin').addEventListener('click',()=>mk&&mkZoomBy(1.5));
+$('mZout').addEventListener('click',()=>mk&&mkZoomBy(1/1.5));
+$('mFit').addEventListener('click',()=>mk&&mkFit({x:mk.imgX,y:mk.imgY,w:mk.img.width,h:mk.img.height}));
+$('mTarget').addEventListener('click',()=>{ const r=mk&&mk.rect; if(!r) return; const cx=r.x+r.w/2, cy=r.y+r.h/2, w=Math.max(r.w*3,60); mkFit({x:cx-w/2,y:cy-w*0.6,w,h:w*1.2}) });
+$('mNext').addEventListener('click',()=>{
+  if(!mk||mk.busy) return;
+  if(mk.phase==='zoom'){ mk.phase='mark'; mkUi(); mkRender(); return }
+  const r=mk.rect; if(!r||r.w<=1) return;
+  mkFinish('ok',{rect:{cx:r.x+r.w/2,cy:r.y+r.h/2,w:r.w,h:r.h},rec:mk.rec});
+});
+$('mBack').addEventListener('click',()=>{ if(!mk) return; mk.phase='zoom'; mkUi(); mkRender() });
+$('mStop').addEventListener('click',()=>mkFinish('stop'));
+$('mSkip').addEventListener('click',()=>mkFinish('skip'));
+function mkFinish(kind,extra){ if(!mk) return; const res=mk.res; mk=null; $('scrMark').classList.add('hide'); res(Object.assign({kind},extra)) }
+function mToast(t){ const e=$('mToast'); e.textContent=t; e.classList.remove('hide'); clearTimeout(e._t); e._t=setTimeout(()=>e.classList.add('hide'),2200) }
+
+/* ručno označavanje na sličici iz videa (dodir na sliku) i kalibracija */
+function snapshotV(){ const c=document.createElement('canvas'); c.width=vw; c.height=vh; c.getContext('2d').drawImage(V,0,0,vw,vh); return c }
+async function manualMark(cx,cy){
+  if(!vw||scanning||offerRun||mk) return;
+  const snap=snapshotV(), t=curT, W=Math.max(300,Math.round(vw*0.1)), H=W*innerHeight/innerWidth;
+  const r=await new Promise(res=>{ mkOpen({mode:'single',res}); $('mTitle').textContent=`Ručno označavanje · t = ${t.toFixed(2)} s`; mkPhoto(snap,0,0,null,{x:cx-W/2,y:cy-H/2,w:W,h:H}) });
+  if(r.kind!=='ok'){ calMode=false; return }
+  if(calMode){ calMode=false; doCalibrate(r.rect); return }
+  const res=await startMeasure(t,r.rect); if(res) $('cardRes').scrollIntoView({behavior:'smooth'});
+}
 view.addEventListener('pointerdown',e=>{tapStart={x:e.clientX,y:e.clientY}});
 view.addEventListener('pointerup',e=>{
   if(!vw||!tapStart) return;
   if(Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)>10){tapStart=null;return}
   tapStart=null;
   const b=view.getBoundingClientRect();
-  openZoom((e.clientX-b.left)/b.width*vw,(e.clientY-b.top)/b.height*vh);
+  manualMark((e.clientX-b.left)/b.width*vw,(e.clientY-b.top)/b.height*vh);
 });
 
 /* ---------- praćenje pločice (NCC + skala), kao u računalnom programu ---------- */
@@ -698,7 +731,7 @@ const REGION_CODES=new Set('BJ BM CK DA DE DJ DU GS IM KA KC KR KT KZ MA NA NG O
 const ALPHA='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_';
 const TO_LET={'0':'O','1':'I','5':'S','8':'B','2':'Z','4':'A','6':'G'}, TO_DIG={O:'0',D:'0',Q:'0',I:'1',L:'1',S:'5',B:'8',Z:'2',G:'6',A:'4',T:'7'};
 let ortP=null, yoloS=null, ocrS=null, YSZ=[640,640];
-let vehicles=[], offer=null, scanning=false, offerRun=false;
+let vehicles=[], scanning=false, offerRun=false;
 const s4k=()=>Math.max(vw,vh)/3840;
 
 function loadOrt(){
@@ -797,7 +830,7 @@ async function scanVehicles(){
   const cv=$('scanBoxes'), cx=cv.getContext('2d'); cv.width=innerWidth; cv.height=innerHeight;
   const gsc=Math.min(cv.width/vw,cv.height/vh), gox=(cv.width-vw*gsc)/2, goy=(cv.height-vh*gsc)/2;
   V.classList.add('full'); $('ovScan').classList.remove('hide'); $('scanBar').value=0;
-  $('scanTitle').textContent='Tražim vozila…'; $('scanTxt').textContent='Učitavam model (prvi put može potrajati)…'; $('scanNums').textContent='';
+  $('scanTitle').textContent='Tražim vozila…'; $('scanQual').textContent=qualityText(); $('scanTxt').textContent='Učitavam model (prvi put može potrajati)…'; $('scanNums').textContent='';
   const trk=new Tracker(); let err=null, busy=false, nproc=0, ema=0, rate=0.5;
   const t0w=performance.now(), s=s4k(), snap=document.createElement('canvas'), snx=snap.getContext('2d',{willReadFrequently:false});
   try{
@@ -822,7 +855,7 @@ async function scanVehicles(){
             const upd=trk.update(t,dets); nproc++;
             for(const r of upd){      // spremi isječak vozila (donji dio okvira) za ponudu – ne ovisi o kasnijem premotavanju videa
               const bw=r.x2-r.x1, bh=r.y2-r.y1; if(bw<MIN_BOX_W*s) continue;
-              const x1=Math.max(0,Math.floor(r.x1-20)), x2=Math.min(vw,Math.ceil(r.x2+20)), yy1=Math.max(sy0,Math.floor(r.y1+bh*0.30)), yy2=Math.min(sy1,Math.ceil(r.y2+Math.max(20,bh*0.35)));
+              const x1=Math.max(0,Math.floor(r.x1-20)), x2=Math.min(vw,Math.ceil(r.x2+20)), yy1=Math.max(sy0,Math.floor(r.y1+bh*0.30)), yy2=Math.min(sy1,Math.ceil(r.y2+Math.max(60,bh*0.6)));
               if(x2-x1<40||yy2-yy1<30) continue;
               const cc=document.createElement('canvas'); cc.width=x2-x1; cc.height=yy2-yy1;
               cc.getContext('2d').drawImage(snap,x1,yy1-sy0,cc.width,cc.height,0,0,cc.width,cc.height);
@@ -861,40 +894,32 @@ $('btnScan').addEventListener('click',scanVehicles);
 /* --- ponude sličica za označavanje (kao u računalnom programu) --- */
 const frontal=r=>(r.x2-r.x1)/Math.max(r.y2-r.y1,1)<=1.9;
 const bestBy=(a,f)=>a.reduce((b,x)=>f(x)<f(b)?x:b);
-function nextOfferRec(v){
-  const s=s4k(), off=v.offeredW; let c=v.cands.filter(frontal);
-  if(!off){ c=c.filter(r=>(r.x2-r.x1)>=MIN_BOX_W*s); return c.length?bestBy(c,r=>Math.abs((r.x2-r.x1)-REF_BOX_W*s)):null }
-  if(v.attempts>=4) return null;
-  c=c.filter(r=>(r.x2-r.x1)>=off*1.2);
-  return c.length?bestBy(c,r=>Math.abs((r.x2-r.x1)-off*1.3)):null;
+function nextOfferRec(v){      // prva ponuda: sličica gdje je vozilo (ne bočno) široko oko 380 px (4K)
+  if(!v.cands.length) return null;
+  const s=s4k(), pool=v.cands.filter(frontal), c=pool.length?pool:v.cands;
+  return bestBy(c,r=>Math.abs((r.x2-r.x1)-REF_BOX_W*s));
 }
-function offerVehicle(veh,rec){
-  return new Promise(res=>{
-    offer={veh,i:Math.max(0,veh.cands.indexOf(rec)),resolve:res,busy:false,rec:null};
-    $('offerRow').classList.remove('hide'); $('zCancel').textContent='Prekini ponude'; $('zOk').textContent='OK – izmjeri';
-    $('ovMark').classList.add('on'); offerShow();
-  });
-}
-async function offerShow(){
-  const o=offer; if(!o) return; o.busy=true; const v=o.veh, r=v.cands[o.i];
-  $('zInfo').textContent='Učitavam sličicu…'; $('zOk').disabled=true;
+async function mkLoadRec(i){
+  const v=mk.veh; mk.i=Math.max(0,Math.min(v.cands.length-1,i)); const r=v.cands[mk.i]; mk.busy=true; $('mInfo').textContent='Učitavam fotku…';
   if(!r.bmp) r.bmp=await createImageBitmap(await r.blobP);
-  if(offer!==o) return;
-  o.rec=r; const c=r.crop, bw=r.x2-r.x1;
-  zs={cx:c.x+c.w/2,cy:c.y+c.h/2,zf:1,base:Math.min(vw,Math.max(c.w,c.h*4/3)),rect:null,img:r.bmp,imgX:c.x,imgY:c.y};
-  zoomLayout(); zoomDraw();
-  $('zHint').textContent=`Vozilo #${v.id} · t = ${r.t.toFixed(2)} s · sličica ${o.i+1}/${v.cands.length} · širina vozila ${Math.round(bw)} px`+(frontal(r)?'':' (bočno – pločica se vjerojatno ne vidi)')+'. Povucite pravokutnik oko pločice, od ruba do ruba.';
-  $('zInfo').textContent='Povucite prstom po slici. Strelice ispod listaju sličice istog vozila.';
-  o.busy=false;
+  if(!mk||mk.veh!==v) return;
+  mk.rec=r; const c=r.crop, bw=r.x2-r.x1, bh=r.y2-r.y1, pw=0.27*bw, ph=pw/4.7;    // unaprijed zadan okvir: približno gdje je pločica
+  mk.busy=false;
+  $('mTitle').textContent=`Vozilo #${v.id} · t = ${r.t.toFixed(2)} s · fotka ${mk.i+1}/${v.cands.length} · širina vozila ${Math.round(bw)} px`+(frontal(r)?'':' (bočno)');
+  mkPhoto(r.bmp,c.x,c.y,{x:(r.x1+r.x2)/2-pw/2,y:r.y2-0.13*bh-ph/2,w:pw,h:ph},null);
 }
-document.querySelectorAll('[data-ostep]').forEach(b=>b.addEventListener('click',()=>{
-  if(!offer||offer.busy) return; const n=offer.veh.cands.length;
-  offer.i=Math.max(0,Math.min(n-1,offer.i+parseInt(b.dataset.ostep))); offerShow();
+document.querySelectorAll('[data-mstep]').forEach(b=>b.addEventListener('click',()=>{
+  if(!mk||mk.busy||mk.mode!=='offer') return; mkLoadRec(mk.i+parseInt(b.dataset.mstep));
 }));
-function finishOffer(kind){ if(!offer) return; const o=offer; offer=null; closeMark(); o.resolve({kind}) }
-$('oLater').addEventListener('click',()=>finishOffer('later'));
-$('oSkip').addEventListener('click',()=>finishOffer('skip'));
-
+$('mNew').addEventListener('click',()=>{      // sljedeća, bliža fotka istog vozila
+  if(!mk||mk.busy||mk.mode!=='offer') return; const v=mk.veh, w=mk.rec.x2-mk.rec.x1;
+  const c=v.cands.map((r,j)=>({r,j})).filter(o=>o.j>mk.i&&frontal(o.r)&&(o.r.x2-o.r.x1)>=w*1.15);
+  if(!c.length){ mToast('Nema bližih fotki ovog vozila.'); return }
+  mkLoadRec(bestBy(c,o=>Math.abs((o.r.x2-o.r.x1)-w*1.3)).j);
+});
+function offerVehicle(veh,rec){
+  return new Promise(res=>{ mkOpen({mode:'offer',res,veh,i:0,rec:null}); mkLoadRec(Math.max(0,veh.cands.indexOf(rec))) });
+}
 function roiFromBitmap(bmp,x0,y0){
   const c=document.createElement('canvas'); c.width=bmp.width; c.height=bmp.height; const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(bmp,0,0);
   const d=x.getImageData(0,0,c.width,c.height).data, g=new Float32Array(c.width*c.height);
@@ -905,7 +930,6 @@ async function processVehicle(v,rec){
   const r=await offerVehicle(v,rec);
   if(r.kind==='stop') return 'stop';
   if(r.kind==='skip'){ v.status='skip'; renderVeh(); return 'ok' }
-  if(r.kind==='later'){ v.status='pending'; renderVeh(); return 'ok' }
   v.status='mjeri'; renderVeh();
   const rr=r.rec, refRoi=roiFromBitmap(rr.bmp,rr.crop.x,rr.crop.y);
   const res=await startMeasure(rr.t,r.rect,v,refRoi);
@@ -916,22 +940,18 @@ async function processVehicle(v,rec){
 async function runOffers(){
   if(offerRun||scanning) return; offerRun=true;
   try{
-    for(;;){
-      const v=vehicles.filter(x=>x.status==='pending').sort((a,b)=>a.attempts-b.attempts||a.id-b.id)[0];
-      if(!v) break;
+    for(const v of vehicles.filter(x=>x.status==='pending')){
       const rec=nextOfferRec(v);
       if(!rec){ v.status='noffer'; renderVeh(); continue }
-      v.offeredW=rec.x2-rec.x1; v.attempts++;
       if(await processVehicle(v,rec)==='stop') break;
     }
-  }finally{ offerRun=false; renderVeh() }
+  }finally{ offerRun=false; renderVeh(); showScreen('res') }
 }
 async function markVehicle(v){
-  if(offerRun||scanning) return; offerRun=true;
-  try{
-    const s=s4k(); if(!v.cands.length){alert('Za ovo vozilo nema spremljene sličice dovoljne veličine. Označite pločicu ručno na sličici (kartica „Ručno”).');return} const pool=v.cands.filter(frontal); const rec=bestBy(pool.length?pool:v.cands,r=>Math.abs((r.x2-r.x1)-REF_BOX_W*s));
-    await processVehicle(v,rec);
-  }finally{ offerRun=false; renderVeh() }
+  if(offerRun||scanning||mk) return;
+  const rec=nextOfferRec(v); if(!rec){ alert('Za ovo vozilo nema spremljene fotke dovoljne veličine. Označite pločicu ručno (Ručni odabir sličice).'); return }
+  offerRun=true;
+  try{ await processVehicle(v,rec) }finally{ offerRun=false; renderVeh() }
 }
 function renderVeh(){
   const L=$('vlist'); L.innerHTML='';
@@ -1077,33 +1097,10 @@ $('btnExport').addEventListener('click',async()=>{
   await seekTo(r.t0); drawView();
 });
 
-/* ---------- snimanje u stranici ---------- */
-let camStream=null,camRec=null,camChunks=[];
-$('btnRec').addEventListener('click',async()=>{
-  if(!navigator.mediaDevices||!window.MediaRecorder){alert('Snimanje u stranici nije podržano. Koristite „Snimi kamerom“.');return}
-  $('ovRec').classList.add('on'); $('camStart').classList.remove('hide'); $('camStop').classList.add('hide'); $('camInfo').textContent='Pokrećem kameru…';
-  try{
-    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160},frameRate:{ideal:30}},audio:false});
-    $('camPrev').srcObject=camStream; const s=camStream.getVideoTracks()[0].getSettings();
-    $('camInfo').textContent=`Kamera: ${s.width}×${s.height} @ ${Math.round(s.frameRate||0)} sl/s`+((s.width||0)<3000?'  ⚠ preglednik nije dao 4K – za bolju točnost koristite „Snimi kamerom“ (obična kamera telefona).':'');
-  }catch(e){$('camInfo').textContent='Kamera nije dostupna: '+e.message}
-});
-$('camStart').addEventListener('click',()=>{
-  if(!camStream) return; camChunks=[];
-  const mt=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=>MediaRecorder.isTypeSupported(m))||'';
-  camRec=new MediaRecorder(camStream,mt?{mimeType:mt,videoBitsPerSecond:40e6}:undefined);
-  camRec.ondataavailable=e=>{if(e.data.size)camChunks.push(e.data)};
-  camRec.onstop=async()=>{ const b=new Blob(camChunks,{type:'video/webm'}); closeCam(); await onFile(new File([b],'snimka_'+Date.now()+'.webm',{type:'video/webm'})) };
-  camRec.start(500); $('camStart').classList.add('hide'); $('camStop').classList.remove('hide'); $('camInfo').textContent='● Snimam…';
-});
-$('camStop').addEventListener('click',()=>{ if(camRec&&camRec.state!=='inactive') camRec.stop() });
-function closeCam(){ $('ovRec').classList.remove('on'); if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null} $('camPrev').srcObject=null }
-$('camClose').addEventListener('click',()=>{ if(camRec&&camRec.state==='recording'){camRec.onstop=null;camRec.stop()} closeCam() });
-
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 /* pomoćnik za automatsko testiranje */
-window.__api={zs:()=>zs,offer:()=>offer,measure:(t,rect)=>startMeasure(t,rect).then(()=>window.__last),scan:()=>scanVehicles().then(()=>vehicles),vehicles:()=>vehicles,yolo:getYolo,ocr:getOcr,normalizePlate,seek:async t=>{curT=await seekTo(t);drawView();return curT},info:()=>({vw,vh,dur,dt,f:curF()})};
+window.__api={mk:()=>mk,measure:(t,rect)=>startMeasure(t,rect).then(()=>window.__last),scan:()=>scanVehicles().then(()=>vehicles),vehicles:()=>vehicles,yolo:getYolo,ocr:getOcr,normalizePlate,seek:async t=>{curT=await seekTo(t);drawView();return curT},info:()=>({vw,vh,dur,dt,f:curF()})};
 </script>
 </body>
 </html>

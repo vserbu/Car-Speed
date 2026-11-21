@@ -51,6 +51,9 @@
   th{color:var(--mut);font-weight:600}
   .overlay{position:fixed;inset:0;background:#000d;z-index:50;display:none;align-items:center;justify-content:center;padding:10px}
   .overlay.on{display:flex}
+  #ovProg{background:none;z-index:60;align-items:flex-end;pointer-events:none}
+  #ovProg .panel{pointer-events:auto;background:#000c;border-color:#fff3;color:#fff}
+  #ovProg progress{width:100%;height:14px}
   .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;width:100%;max-width:720px;max-height:100%;overflow:auto}
   #zoomWrap{background:#000;border-radius:8px;overflow:hidden;touch-action:none}
   #zoom{width:100%;display:block;touch-action:none}
@@ -78,6 +81,7 @@
   #mInfo{font-size:13px;color:#dfe7ee;min-height:18px}
   .mRow{display:flex;gap:8px;margin-top:8px;pointer-events:auto}
   .mRow button{flex:1 1 0;min-height:50px;padding:8px 6px}
+  .mSide,#mNav,#mStop,#mBack{display:none!important}
   .mSide{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px}
   .mSide button{width:52px;height:52px;min-height:52px;padding:0;font-size:24px;background:#000b}
   #mToast{position:absolute;left:50%;top:42%;transform:translateX(-50%);background:#000d;color:#fff;padding:10px 16px;border-radius:10px;pointer-events:none;z-index:2}
@@ -197,10 +201,8 @@
   <div id="mToast" class="hide"></div>
   <div class="mBot">
     <div id="mInfo"></div>
-    <div class="mRow" id="mNav">
-      <button data-mstep="-5">◀◀</button><button data-mstep="-1">◀</button><button data-mstep="1">▶</button><button data-mstep="5">▶▶</button>
-      <button id="mNew" style="flex:2 1 0">📷 Ponudi novu fotku</button>
-    </div>
+    <div class="mRow" id="mNav"><button data-mstep="-1">◀</button><button data-mstep="1">▶</button></div>
+    <div class="mRow" id="mNewRow"><button id="mNew">📷 Ponudi novu fotku</button></div>
     <div class="mRow">
       <button id="mSkip" class="bad">Preskoči vozilo</button>
       <button id="mStop">Prekini</button>
@@ -344,9 +346,9 @@ async function onFile(f){
   $('vinfo').textContent='Učitavam…'; srcSize=f.size||0;
   vehicles=[]; renderVeh(); $('vehInfo').textContent=''; lastResult=null;
   try{await loadBlob(f,f.name||'snimka')}catch(e){ alert('Video se ne može učitati: '+e.message); return }
-  showScreen('res'); scanVehicles();
+  showScreen('none'); scanVehicles();
 }
-function showScreen(n){ $('scrStart').classList.toggle('hide',n!=='start'); $('scrRes').classList.toggle('hide',n!=='res'); window.scrollTo(0,0) }
+function showScreen(n){ $('scrStart').classList.toggle('hide',n!=='start'); $('scrRes').classList.toggle('hide',n!=='res'); window.scrollTo(0,0) }  // 'none' = sve skriveno (traženje/označavanje/mjerenje)
 $('btnNew').addEventListener('click',()=>{ if(scanning||offerRun||mk) return; try{V.pause()}catch(e){} showScreen('start') });
 $('inCam').addEventListener('change',e=>{onFile(e.target.files[0]);e.target.value=''});
 $('inFile').addEventListener('change',e=>{onFile(e.target.files[0]);e.target.value=''});
@@ -394,7 +396,7 @@ function mkUi(){
   $('mStep').textContent=z?'1/2 · Zumirajte: jedan prst pomiče sliku, dva prsta (ili tipke ＋ −) zumiraju. Kad se pločica dobro vidi, potvrdite zoom.'
     :'2/2 · Namjestite okvir na pločicu: povucite unutar okvira za pomak, bijele točke mijenjaju veličinu, a povlačenje izvan okvira crta novi.';
   $('mNext').textContent=z?'Potvrdi zoom →':'OK – izmjeri';
-  $('mBack').classList.toggle('hide',z); $('mNav').classList.toggle('hide',!offerM); $('mSkip').classList.toggle('hide',!offerM);
+  $('mSkip').textContent=offerM?'Preskoči vozilo':'Odustani'; $('mNewRow').classList.toggle('hide',!offerM);
   $('mStop').textContent=offerM?'Prekini ponude':'Odustani'; $('mTarget').classList.toggle('hide',!mk.rect);
   mkInfo();
 }
@@ -637,12 +639,12 @@ function speedOf(pts,f,wmin){
 /* ---------- mjerenje ---------- */
 let ctl=null;
 async function startMeasure(t0,rect,veh,refRoiIn){
-  ctl={cancel:false,rate:0.25}; $('ovProg').classList.add('on'); $('pBar').value=0;
-  $('pTitle').textContent='1/2 · Čitam sličice oko pločice (video se reproducira polako)…'; $('pTxt').textContent='';
+  ctl={cancel:false,rate:0.25}; V.classList.add('full'); $('ovProg').classList.add('on'); $('pBar').value=0;
+  $('pTitle').textContent='1/3 · Čitam sličice videa (reproducira se polako)…'; $('pTxt').textContent='';
   const t1=performance.now(); let result=null;
   const refRoi=refRoiIn||grab(rect.cx-rect.w*1.5,rect.cy-rect.h*6,rect.cx+rect.w*1.5,rect.cy+rect.h*6);  // spremljeni isječak (ponuda) ili sličica koja je sada prikazana
   const box=plan(rect), tS=Math.max(0,t0-5.5), tE=Math.min(dur,t0+2.5);
-  ctl.onCap=(n,p)=>{ $('pBar').value=Math.round(p*100); $('pTxt').textContent=`${n} sličica pročitano`; };
+  ctl.onCap=(n,p)=>{ $('pBar').value=Math.round(Math.min(1,Math.max(0,p))*100); $('pTxt').textContent=`${n} sličica pročitano (${Math.round(Math.min(1,Math.max(0,p))*100)} %)`; };
   try{
     const frames=await captureFrames(tS,tE,box,ctl);
     if(frames.length<5||!refRoi) throw new Error('Nije pročitano dovoljno sličica (preglednik nije dao okvire videa). '+frames.length+' sl., ref='+!!refRoi);
@@ -651,8 +653,8 @@ async function startMeasure(t0,rect,veh,refRoiIn){
     const ref=pickRef(frames,box,t0,refRoi,rect);
     if(!ref) throw new Error('Oznaka pločice nije pronađena u pročitanim sličicama.');
     ctl.refdx=ref.dx||0; ctl.refdy=ref.dy||0;
-    $('pTitle').textContent='2/2 · Pratim pločicu unatrag i naprijed…'; $('pBar').removeAttribute('value');
-    let nb=0,nf=0; ctl.onStep=(dir,n,W)=>{ if(dir<0) nb=n; else nf=n; $('pTxt').textContent=`unatrag: ${nb} sličica, naprijed: ${nf} sličica, širina ${fmt(W,0)} px`};
+    $('pTitle').textContent='2/3 · Pratim pločicu unatrag i naprijed…'; $('pBar').value=0;
+    let nb=0,nf=0; ctl.onStep=(dir,n,W)=>{ if(dir<0) nb=n; else nf=n; $('pBar').value=Math.min(100,Math.round(100*(nb+nf)/Math.max(1,frames.length))); $('pTxt').textContent=`unatrag: ${nb} sličica, naprijed: ${nf} sličica, širina ${fmt(W,0)} px`};
     await frameDone();
     const back=ctl.cancel?[]:await trackDir(frames,box,ref.i,rect,-1,ctl);
     const fwd=ctl.cancel?[]:await trackDir(frames,box,ref.i,rect,+1,ctl);
@@ -660,12 +662,12 @@ async function startMeasure(t0,rect,veh,refRoiIn){
     ctl.secs=(performance.now()-t1)/1000; ctl.nframes=frames.length;
     let reg=null,regErr=null;
     if(!ctl.cancel){
-      $('pTitle').textContent='Čitam registraciju…'; $('pTxt').textContent=''; await frameDone();
+      $('pTitle').textContent='3/3 · Čitam registraciju…'; $('pBar').value=100; $('pTxt').textContent=''; await frameDone();
       try{ reg=await readPlate(frames,box,pts,rect); if(!reg) regErr='pločica nije dovoljno čitljiva' }catch(e){ regErr=e.message; console.error(e) }
     }
     result=finishMeasure(pts,rect,frames[ref.i].t,ctl.cancel,{reg,regErr,veh});
   }catch(e){ $('pTxt').textContent='Greška: '+e.message; console.error(e); await sleep(2500) }
-  $('ovProg').classList.remove('on');
+  $('ovProg').classList.remove('on'); V.classList.remove('full');
   try{ await seekTo(t0); curT=t0; drawView(); }catch(e){}
   return result;
 }
@@ -826,7 +828,7 @@ function sameVehicle(a,b){
 async function scanVehicles(){
   if(!vw){alert('Najprije učitajte snimku.');return}
   if(scanning||offerRun) return;
-  scanning=true; $('btnScan').disabled=true; vehicles=[]; renderVeh();
+  scanning=true; $('btnScan').disabled=true; vehicles=[]; renderVeh(); showScreen('none');
   ctl={cancel:false};
   const cv=$('scanBoxes'), cx=cv.getContext('2d'); cv.width=innerWidth; cv.height=innerHeight;
   const gsc=Math.min(cv.width/vw,cv.height/vh), gox=(cv.width-vw*gsc)/2, goy=(cv.height-vh*gsc)/2;
@@ -884,11 +886,11 @@ async function scanVehicles(){
   const cancelled=ctl.cancel;
   try{ await seekTo(0); curT=0; drawView(); }catch(e){}
   scanning=false; $('btnScan').disabled=false;
-  if(err){ console.error(err); $('vehInfo').textContent='Greška pri traženju vozila: '+err.message; return }
+  if(err){ console.error(err); $('vehInfo').textContent='Greška pri traženju vozila: '+err.message; showScreen('res'); return }
   vehicles=approachingTracks(trk.tr); renderVeh();
   const secs=Math.round((performance.now()-t0w)/1000);
   $('vehInfo').textContent=`Pretraženo ${nproc} sličica za ${secs} s${cancelled?' (prekinuto)':''}. Vozila koja prilaze: ${vehicles.length}.`+(vehicles.length?'':' Ako ste očekivali vozila, uključite „cijela visina slike“ u postavkama ili označite pločicu ručno ispod.');
-  if(vehicles.length&&!cancelled) runOffers();
+  if(vehicles.length&&!cancelled) runOffers(); else showScreen('res');
 }
 $('btnScan').addEventListener('click',scanVehicles);
 

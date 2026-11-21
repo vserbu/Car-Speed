@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111418">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Brzina vozila 0.5 beta</title>
+<title>Brzina vozila 0.5.1 beta</title>
 <style>
   :root{--bg:#111418;--card:#1b2027;--line:#2c343f;--fg:#e8edf2;--mut:#93a0ad;--acc:#4ea1ff;--ok:#3ecf8e;--warn:#ffb454;--bad:#ff6b6b}
   *{box-sizing:border-box}
@@ -51,6 +51,12 @@
   th{color:var(--mut);font-weight:600}
   .overlay{position:fixed;inset:0;background:#000d;z-index:50;display:none;align-items:center;justify-content:center;padding:10px}
   .overlay.on{display:flex}
+  #pGraphBox{position:fixed;left:10px;right:10px;top:48px;bottom:max(190px,28vh);z-index:60;background:rgba(0,0,0,.32);border:1px solid #ffffff2a;border-radius:14px;pointer-events:none;overflow:hidden}
+  #pGraph{position:absolute;inset:0;width:100%;height:100%}
+  #pBig{position:absolute;right:14px;top:6px;font-size:46px;font-weight:800;color:#fff;text-shadow:0 2px 8px #000;z-index:1;line-height:1.1}
+  #pBig small{font-size:18px;font-weight:600;margin-left:4px;color:#dfe7ee}
+  .veh .vbig{flex:0 0 auto;font-size:34px;font-weight:800;line-height:1;min-width:104px;color:var(--ok,#3ecf8e)}
+  .veh .vbig small{font-size:14px;font-weight:600;color:var(--mut);margin-left:3px}
   #ovProg{background:none;z-index:60;align-items:flex-end;pointer-events:none}
   #ovProg .panel{pointer-events:auto;background:#000c;border-color:#fff3;color:#fff}
   #ovProg progress{width:100%;height:14px}
@@ -68,12 +74,12 @@
   #scrStart{min-height:92vh;display:flex;flex-direction:column;justify-content:center;gap:18px;text-align:center}
   #scrStart h1{font-size:30px;margin:0 0 14px}
   .btn.big{font-size:22px;min-height:100px;width:100%;border-radius:16px}
-  .resHead{display:flex;align-items:center;gap:10px;justify-content:space-between}
+  .resHead{padding-right:84px;display:flex;align-items:center;gap:10px;justify-content:space-between}
   .resHead button{min-height:40px;padding:8px 12px}
   #scrMark{position:fixed;inset:0;z-index:70;background:#000;user-select:none;-webkit-user-select:none}
   #mc{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
   .mTop,.mBot{position:absolute;left:0;right:0;pointer-events:none;padding:10px 12px}
-  .mTop{top:0;padding-top:max(10px,env(safe-area-inset-top));background:linear-gradient(#000e,#0000)}
+  .mTop{padding-right:84px;top:0;padding-top:max(10px,env(safe-area-inset-top));background:linear-gradient(#000e,#0000)}
   .mBot{bottom:0;padding-bottom:max(10px,env(safe-area-inset-bottom));background:linear-gradient(#0000,#000e 30%)}
   #mTitle{font-weight:700}
   #mQual{font-size:12px;color:#aab6c2}
@@ -112,7 +118,7 @@
     <label class="btn big">📁 Odaberi video
       <input id="inFile" type="file" accept="video/*" hidden>
     </label>
-    <div style="font-size:11px;color:#6b7785;margin-top:6px">verzija 0.5 beta</div>
+    <div style="font-size:11px;color:#6b7785;margin-top:6px">verzija 0.5.1 beta</div>
   </section>
 
   <!-- NAKON OBRADE: pregled, rezultati, popis -->
@@ -231,10 +237,12 @@
   <div class="scanBot"><div id="scanNums"></div><button id="scanCancel" class="bad">Prekini</button></div>
 </div>
 
+<!-- Graf uživo (sloj preko videa) -->
+<div id="pGraphBox" class="hide"><div id="pBig"></div><canvas id="pGraph"></canvas></div>
+
 <!-- Napredak -->
 <div id="ovProg" class="overlay"><div class="panel">
   <div id="pTitle" style="font-weight:700;margin-bottom:6px">Mjerim…</div>
-  <canvas id="pGraph" width="680" height="200" class="hide" style="width:100%;height:auto;margin-bottom:6px"></canvas>
   <progress id="pBar" value="0" max="100"></progress>
   <div id="pTxt" class="info" style="margin:6px 0"></div>
   <button id="pCancel" class="bad">Prekini</button>
@@ -242,7 +250,7 @@
 
 <script>
 "use strict";
-const APP_VER='0.5 beta';
+const APP_VER='0.5.1 beta';
 const LOGS=[]; const T0L=performance.now();
 function L(...a){ const t=((performance.now()-T0L)/1000).toFixed(2); const m=a.map(x=>{ if(x instanceof Error) return x.message; if(typeof x==='object'){ try{return JSON.stringify(x)}catch(e){return String(x)} } return String(x) }).join(' '); LOGS.push(`[${t}] ${m}`); if(LOGS.length>1500) LOGS.splice(0,300) }
 for(const k of ['log','warn','error']){ const o=console[k].bind(console); console[k]=(...a)=>{ L(k.toUpperCase()+':',...a); o(...a) } }
@@ -691,7 +699,7 @@ function speedOf(pts,f,wmin){
 /* ---------- mjerenje ---------- */
 let ctl=null;
 async function startMeasure(t0,rect,veh,refRoiIn){
-  ctl={cancel:false,rate:0.25}; $('pGraph').classList.add('hide'); wakeOn(); V.classList.add('full'); $('ovProg').classList.add('on'); $('pTitle').textContent='Pripremam video…'; $('pTxt').textContent='';
+  ctl={cancel:false,rate:0.25}; $('pGraphBox').classList.add('hide'); $('pBig').innerHTML=''; wakeOn(); V.classList.add('full'); $('ovProg').classList.add('on'); $('pTitle').textContent='Pripremam video…'; $('pTxt').textContent='';
   if(measN++>0||V.error){ try{ await reloadVideo() }catch(e){ L('reloadVideo greška',e) } }
   L('startMeasure: t0='+t0.toFixed(2)+' rect='+[rect.cx,rect.cy,rect.w,rect.h].map(x=>Math.round(x)).join(',')+' '+vstate());
   $('ovProg').classList.add('on'); $('pBar').value=0;
@@ -711,7 +719,7 @@ async function startMeasure(t0,rect,veh,refRoiIn){
     if(!ref) throw new Error('Oznaka pločice nije pronađena u pročitanim sličicama.');
     ctl.refdx=ref.dx||0; ctl.refdy=ref.dy||0;
     ctl.phase=2; $('pTitle').textContent='2/3 · Pratim pločicu unatrag i naprijed…'; $('pBar').value=0;
-    let nb=0,nf=0; ctl.live=[]; $('pGraph').classList.remove('hide'); let lastDraw=0; ctl.onStep=(dir,n,W,tt)=>{ if(dir<0) nb=n; else nf=n; ctl.live.push({t:tt,W}); if(performance.now()-lastDraw>300){ lastDraw=performance.now(); drawGraph({pts:ctl.live,f:curF()},$('pGraph')) }; $('pBar').value=Math.min(100,Math.round(100*(nb+nf)/Math.max(1,frames.length))); $('pTxt').textContent=`unatrag: ${nb} sličica, naprijed: ${nf} sličica, širina ${fmt(W,0)} px`};
+    let nb=0,nf=0; ctl.live=[]; { const gb=$('pGraphBox'), g=$('pGraph'), d=Math.min(devicePixelRatio||1,2); gb.classList.remove('hide'); g._d=d; g.width=Math.max(200,Math.round(gb.clientWidth*d)); g.height=Math.max(120,Math.round(gb.clientHeight*d)); } let lastDraw=0; ctl.onStep=(dir,n,W,tt)=>{ if(dir<0) nb=n; else nf=n; ctl.live.push({t:tt,W}); if(performance.now()-lastDraw>300){ lastDraw=performance.now(); drawGraph({pts:ctl.live,f:curF()},$('pGraph')); const sp=ctl.live.length>=8?speedOf(ctl.live.map(q=>({t:q.t,W:q.W,ncc:1})),curF(),35):null; if(sp) $('pBig').innerHTML=`≈ ${sp.v.toFixed(0)}<small>km/h</small>` }; $('pBar').value=Math.min(100,Math.round(100*(nb+nf)/Math.max(1,frames.length))); $('pTxt').textContent=`unatrag: ${nb} sličica, naprijed: ${nf} sličica, širina ${fmt(W,0)} px`};
     await frameDone();
     const back=ctl.cancel?[]:await trackDir(frames,box,ref.i,rect,-1,ctl);
     const fwd=ctl.cancel?[]:await trackDir(frames,box,ref.i,rect,+1,ctl);
@@ -724,8 +732,8 @@ async function startMeasure(t0,rect,veh,refRoiIn){
     }
     result=finishMeasure(pts,rect,frames[ref.i].t,ctl.cancel,{reg,regErr,veh});
   }catch(e){ $('pTxt').textContent='Greška: '+e.message; console.error(e); await sleep(2500) }
-  if(result&&result.pts&&result.pts.length>2){ try{ drawGraph(result,$('pGraph')); $('pTitle').textContent='Gotovo'+(result.all?` · ${result.all.v.toFixed(1)} km/h`:''); $('pBar').value=100 }catch(e){} await sleep(2200) }
-  $('pGraph').classList.add('hide'); $('ovProg').classList.remove('on'); V.classList.remove('full'); wakeOff(); clearInterval(ctl&&ctl.tick);
+  if(result&&result.pts&&result.pts.length>2){ try{ drawGraph(result,$('pGraph')); $('pTitle').textContent='Gotovo'; if(result.all) $('pBig').innerHTML=`${result.all.v.toFixed(0)}<small>km/h</small>`; $('pBar').value=100 }catch(e){} await sleep(2200) }
+  $('pGraphBox').classList.add('hide'); $('ovProg').classList.remove('on'); V.classList.remove('full'); wakeOff(); clearInterval(ctl&&ctl.tick);
   try{ await seekTo(t0); curT=t0; drawView(); }catch(e){}
   return result;
 }
@@ -769,16 +777,16 @@ function showResult(r,cancelled){
   drawGraph(r);
 }
 function drawGraph(r,cv){
-  const c=cv||$('pGraph'); if(!c) return; const x=c.getContext('2d'), W=c.width, H=c.height; x.clearRect(0,0,W,H);
+  const c=cv||$('pGraph'); if(!c) return; const x=c.getContext('2d'), d=c._d||1, W=c.width/d, H=c.height/d; x.setTransform(d,0,0,d,0,0); x.clearRect(0,0,W,H);
   const pts=r.pts.filter(p=>p.W>=22); if(pts.length<2) return;
   const f=r.f, t=pts.map(p=>p.t), Z=pts.map(p=>f*EU_PLATE_M/p.W);
   const t0=Math.min(...t), t1=Math.max(...t), zmax=Math.max(...Z)*1.05, zmin=0;
   const L=46,R=10,T=12,B=26, sx=u=>L+(u-t0)/(t1-t0||1)*(W-L-R), sy=z=>T+(1-(z-zmin)/(zmax-zmin))*(H-T-B);
-  x.strokeStyle='#2c343f'; x.fillStyle='#93a0ad'; x.font='12px system-ui'; x.lineWidth=1;
+  x.strokeStyle='#2c343f'; x.fillStyle='#93a0ad'; x.font='13px system-ui'; x.lineWidth=1;
   for(let i=0;i<=4;i++){const z=zmin+(zmax-zmin)*i/4; x.beginPath();x.moveTo(L,sy(z));x.lineTo(W-R,sy(z));x.stroke(); x.fillText(z.toFixed(0)+' m',4,sy(z)+4)}
   x.fillText('t (s)',W-40,H-6); x.fillText(t0.toFixed(1),L,H-6);
-  pts.forEach((p,i)=>{ const good=p.W>=35; x.fillStyle=good?'#4ea1ff':'#5b6672'; x.beginPath(); x.arc(sx(t[i]),sy(Z[i]),2.6,0,7); x.fill() });
-  if(r.all){ x.strokeStyle='#3ecf8e'; x.lineWidth=2; x.beginPath();
+  pts.forEach((p,i)=>{ const good=p.W>=35; x.fillStyle=good?'#4ea1ff':'#5b6672'; x.beginPath(); x.arc(sx(t[i]),sy(Z[i]),3.4,0,7); x.fill() });
+  if(r.all){ x.strokeStyle='#3ecf8e'; x.lineWidth=3; x.beginPath();
     const a=r.all; const tt0=a.t0, z0=a.Z0;
     x.moveTo(sx(t0),sy(z0+a.slope*(t0-tt0))); x.lineTo(sx(t1),sy(z0+a.slope*(t1-tt0))); x.stroke(); }
 }
@@ -1023,8 +1031,10 @@ function renderVeh(){
     const b=document.createElement('b'), sp=document.createElement('span');
     b.textContent=`Vozilo #${v.id}`;
     let st=label[v.status]||'';
-    if(v.status==='done'&&v.result&&v.result.all){ st=`${v.result.all.v.toFixed(0)} km/h`+(v.result.reg?` · ${v.result.reg}`:'') }
+    const big=document.createElement('div'); big.className='vbig';
+    if(v.status==='done'&&v.result&&v.result.all){ big.innerHTML=`${v.result.all.v.toFixed(0)}<small>km/h</small>`; st=(v.result.reg?`${v.result.reg} · `:'')+'izmjereno' }
     sp.textContent=`${v.recs[0].t.toFixed(1)}–${v.recs[v.recs.length-1].t.toFixed(1)} s · ${st}`;
+    if(big.innerHTML) row.appendChild(big);
     vt.append(b,sp); row.appendChild(vt);
     const mk=(txt,fn,cls)=>{const x=document.createElement('button'); x.textContent=txt; if(cls) x.className=cls; x.addEventListener('click',fn); row.appendChild(x)};
     if(v.status==='done'&&v.result) mk('Rezultat',()=>{lastResult=v.result; $('reg').value=v.result.reg||''; showResult(v.result); $('cardRes').scrollIntoView({behavior:'smooth'})});

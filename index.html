@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Brzina vozila</title>
+<style>
+  :root{--bg:#111418;--card:#1b2027;--line:#2c343f;--fg:#e8edf2;--mut:#93a0ad;--acc:#4ea1ff;--ok:#3ecf8e;--warn:#ffb454;--bad:#ff6b6b}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  main{max-width:720px;margin:0 auto;padding:12px 12px 80px}
+  h1{font-size:20px;margin:6px 0 2px}
+  .sub{color:var(--mut);font-size:13px;margin-bottom:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
+  .card h2{font-size:15px;margin:0 0 8px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  button,.btn{font:inherit;color:var(--fg);background:#262e38;border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-height:46px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  button:active,.btn:active{background:#313b47}
+  button.pri,.btn.pri{background:var(--acc);border-color:var(--acc);color:#04111f;font-weight:700}
+  button.bad{background:#3a2327;border-color:#5a2f35}
+  button:disabled{opacity:.45}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .row>*{flex:1 1 auto}
+  .row.nf>*{flex:0 0 auto}
+  input[type=text],input[type=number],select{font:inherit;color:var(--fg);background:#10151a;border:1px solid var(--line);border-radius:8px;padding:10px;min-height:44px;width:100%}
+  input[type=range]{width:100%;height:36px}
+  #viewWrap{position:relative;background:#000;border-radius:8px;overflow:hidden;touch-action:manipulation}
+  #view{width:100%;display:block}
+  #viewHint{position:absolute;left:0;right:0;bottom:0;background:#000a;color:#fff;font-size:13px;padding:6px 10px;text-align:center;pointer-events:none}
+  #vid{position:absolute;left:0;top:0;width:2px;height:2px;opacity:.01;pointer-events:none}
+  .info{color:var(--mut);font-size:13px}
+  .big{font-size:44px;font-weight:800;line-height:1.05}
+  .big small{font-size:18px;font-weight:600;color:var(--mut)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .kv{background:#10151a;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .kv b{display:block;font-size:20px}
+  .kv span{font-size:12px;color:var(--mut)}
+  canvas#graph{width:100%;height:190px;background:#10151a;border:1px solid var(--line);border-radius:8px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600}
+  .overlay{position:fixed;inset:0;background:#000d;z-index:50;display:none;align-items:center;justify-content:center;padding:10px}
+  .overlay.on{display:flex}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;width:100%;max-width:720px;max-height:100%;overflow:auto}
+  #zoomWrap{background:#000;border-radius:8px;overflow:hidden;touch-action:none}
+  #zoom{width:100%;display:block;touch-action:none}
+  .msg{padding:8px 10px;border-radius:8px;font-size:14px;margin-top:8px}
+  .msg.warn{background:#3a2f1c;color:var(--warn)}
+  .msg.bad{background:#3a2327;color:var(--bad)}
+  .msg.ok{background:#1b3328;color:var(--ok)}
+  progress{width:100%;height:14px}
+  #camPrev{width:100%;background:#000;border-radius:8px;max-height:60vh}
+  .hide{display:none!important}
+  details summary{cursor:pointer;color:var(--mut);padding:6px 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>Brzina vozila</h1>
+  <div class="sub">Mjerenje iz širine registarske pločice (EU, 520 mm). Snimi → označi pločicu prstom → brzina. Točnost otprilike ±10 %.</div>
+
+  <!-- 1. VIDEO -->
+  <div class="card">
+    <h2>1 · Snimka</h2>
+    <div class="row">
+      <label class="btn pri">🎥 Snimi kamerom
+        <input id="inCam" type="file" accept="video/*" capture="environment" hidden>
+      </label>
+      <label class="btn">📁 Odaberi video
+        <input id="inFile" type="file" accept="video/*" hidden>
+      </label>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="btnRec">⏺ Snimi u ovoj stranici (pokus)</button>
+    </div>
+    <div id="vinfo" class="info" style="margin-top:8px">Nema učitane snimke. „Snimi kamerom“ otvara običnu kameru telefona (preporučeno: snimajte u 4K, 30 ili 60 fps).</div>
+  </div>
+
+  <!-- 2. OZNAČI -->
+  <div class="card" id="cardMark">
+    <h2>2 · Označi pločicu</h2>
+    <div id="viewWrap">
+      <canvas id="view" width="640" height="360"></canvas>
+      <div id="viewHint">Listajte do sličice na kojoj se pločica jasno vidi, pa dodirnite pločicu.</div>
+    </div>
+    <input id="slider" type="range" min="0" max="1000" value="0">
+    <div class="row">
+      <button data-step="-10">◀◀ −10</button>
+      <button data-step="-1">◀ −1</button>
+      <button data-step="1">+1 ▶</button>
+      <button data-step="10">+10 ▶▶</button>
+    </div>
+    <div id="tinfo" class="info" style="margin-top:6px"></div>
+  </div>
+
+  <!-- 3. REZULTAT -->
+  <div class="card" id="cardRes">
+    <h2>3 · Rezultat</h2>
+    <div id="resEmpty" class="info">Označite pločicu na sličici gdje je jasno vidljiva (najbolje kad je vozilo blizu, pločica ≥ 80 px široka).</div>
+    <div id="resBox" class="hide">
+      <div class="big"><span id="rSpeed">–</span> <small>km/h</small></div>
+      <div id="rNote" class="info"></div>
+      <div class="grid2" style="margin-top:8px">
+        <div class="kv"><b id="rNear">–</b><span>brzina pri kraju (pločica ≥ 60 px)</span></div>
+        <div class="kv"><b id="rDist">–</b><span>udaljenost (m), od – do</span></div>
+        <div class="kv"><b id="rPts">–</b><span>sličica korišteno</span></div>
+        <div class="kv"><b id="rW">–</b><span>širina pločice (px), od – do</span></div>
+      </div>
+      <div style="margin-top:8px"><canvas id="graph" width="680" height="190"></canvas></div>
+      <div id="rWarn"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="reg" type="text" placeholder="Registracija (npr. DU 123-AB)" autocapitalize="characters">
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnAdd" class="pri">➕ Spremi u popis</button>
+        <button id="btnExport">🎞 Video s podacima</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Popis mjerenja</h2>
+    <div id="listEmpty" class="info">Još nema spremljenih mjerenja.</div>
+    <table id="tbl" class="hide"><thead><tr><th>#</th><th>Registracija</th><th>km/h</th><th>blizu</th><th>Vrijeme</th></tr></thead><tbody></tbody></table>
+    <div class="row" style="margin-top:8px"><button id="btnCsv">⬇ CSV</button><button id="btnClear" class="bad">Očisti popis</button></div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>Postavke i kalibracija</summary>
+      <div class="row">
+        <div><div class="info">Brzina snimanja (sličica/s)</div>
+          <select id="fpsSel"><option value="auto">automatski</option><option>24</option><option>25</option><option>30</option><option>50</option><option>60</option></select></div>
+        <div><div class="info">Žarišna duljina f (px na 4K širini 3840)</div>
+          <input id="fIn" type="number" step="10" value="2900"></div>
+      </div>
+      <div class="info" style="margin-top:6px">Zadano 2900 px vrijedi okvirno za Samsung A53/A54 (glavna kamera, 4K). Za bolju točnost: snimite auto na poznatoj udaljenosti (npr. 10 m), kliknite „Kalibriraj“ pa označite pločicu na toj snimci.</div>
+      <div class="row nf" style="margin-top:6px"><button id="btnCal">📐 Kalibriraj iz označene pločice…</button><button id="btnCalReset">Vrati zadano</button></div>
+      <div id="calInfo" class="info" style="margin-top:6px"></div>
+    </details>
+  </div>
+</main>
+
+<video id="vid" muted playsinline preload="auto"></video>
+
+<!-- Zoom za označavanje -->
+<div id="ovMark" class="overlay"><div class="panel">
+  <div class="info" id="zHint">Povucite pravokutnik oko pločice – od ruba do ruba (i plavi pojas lijevo). Tipke ispod služe za fino namještanje.</div>
+  <div id="zoomWrap"><canvas id="zoom" width="800" height="600"></canvas></div>
+  <div class="info" id="zInfo" style="margin:6px 0">Povucite prstom po slici.</div>
+  <div class="row nf">
+    <button data-nudge="l">◀</button><button data-nudge="r">▶</button><button data-nudge="u">▲</button><button data-nudge="d">▼</button>
+    <button data-nudge="w-">uži</button><button data-nudge="w+">šire</button>
+    <button id="zOut">🔍−</button><button id="zIn">🔍+</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="zCancel">Odustani</button>
+    <button id="zOk" class="pri" disabled>OK – izmjeri</button>
+  </div>
+</div></div>
+
+<!-- Napredak -->
+<div id="ovProg" class="overlay"><div class="panel">
+  <div id="pTitle" style="font-weight:700;margin-bottom:6px">Mjerim…</div>
+  <progress id="pBar" value="0" max="100"></progress>
+  <div id="pTxt" class="info" style="margin:6px 0"></div>
+  <button id="pCancel" class="bad">Prekini</button>
+</div></div>
+
+<!-- Snimanje u stranici -->
+<div id="ovRec" class="overlay"><div class="panel">
+  <video id="camPrev" muted playsinline autoplay></video>
+  <div id="camInfo" class="info" style="margin:6px 0">Pokrećem kameru…</div>
+  <div class="row">
+    <button id="camStart" class="pri">⏺ Počni snimati</button>
+    <button id="camStop" class="hide bad">⏹ Zaustavi</button>
+    <button id="camClose">Zatvori</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const V=$('vid'), view=$('view'), vctx=view.getContext('2d');
+const EU_PLATE_M=0.52;
+let vw=0,vh=0,dur=0,dt=1/30,curT=0,srcName='',srcURL=null,seekBusy=false,pendingSeek=null;
+let lastResult=null,results=[];
+let calMode=false;
+
+/* ---------- pomoćne ---------- */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const fmt=(x,d=1)=>Number.isFinite(x)?x.toFixed(d):'–';
+function curF(){ // f u pikselima za trenutnu rezoluciju
+  const f4k=parseFloat($('fIn').value)||2900;
+  return f4k*Math.max(vw,vh)/3840;
+}
+
+/* ---------- učitavanje videa ---------- */
+function loadBlob(blob,name){
+  if(srcURL) URL.revokeObjectURL(srcURL);
+  srcURL=URL.createObjectURL(blob); srcName=name||'snimka';
+  V.src=srcURL; V.load();
+  return new Promise((res,rej)=>{
+    V.onloadedmetadata=async()=>{
+      try{
+        if(!isFinite(V.duration)){ // MediaRecorder webm bez trajanja
+          await new Promise(r=>{V.onseeked=()=>{V.onseeked=null;r()};V.currentTime=1e7});
+        }
+        dur=V.duration; vw=V.videoWidth; vh=V.videoHeight;
+        if(!isFinite(dur)||!vw){rej(new Error('Video se ne može pročitati'));return}
+        view.width=Math.min(vw,1080); view.height=Math.round(view.width*vh/vw);
+        lastResult=null; showResult(null);
+        await detectFps();
+        try{V.pause()}catch(e){}
+        const t=await seekTo(0.0); curT=t; drawView();
+        $('slider').max=Math.round(dur*1000); $('slider').value=0;
+        updateInfo(); res();
+      }catch(e){rej(e)}
+    };
+    V.onerror=()=>rej(new Error('Preglednik ne može otvoriti ovaj video (kodek?)'));
+  });
+}
+function updateInfo(){
+  $('vinfo').textContent=`${srcName}: ${vw}×${vh}, ${fmt(dur,1)} s, ≈${fmt(1/dt,0)} sl/s, f≈${fmt(curF(),0)} px`;
+  $('tinfo').textContent=`t = ${fmt(curT,3)} s / ${fmt(dur,2)} s`;
+  const w=Math.max(vw,vh)>=3600?'':'  ⚠ Snimka nije u 4K – točnost mjerenja na većoj udaljenosti bit će lošija.';
+  if(w) $('vinfo').textContent+=w;
+}
+async function detectFps(){
+  const sel=$('fpsSel').value;
+  if(sel!=='auto'){dt=1/parseFloat(sel);return}
+  dt=1/30;
+  if(!V.requestVideoFrameCallback) return;
+  try{
+    V.currentTime=Math.min(0.2,dur/4);
+    await new Promise(r=>{V.onseeked=()=>{V.onseeked=null;r()}});
+    const ts=[];
+    await new Promise(r=>{
+      const cb=(n,m)=>{ts.push(m.mediaTime); if(ts.length<14){V.requestVideoFrameCallback(cb)} else r()};
+      V.requestVideoFrameCallback(cb);
+      V.playbackRate=1; V.play().catch(()=>r());
+      setTimeout(r,2500);
+    });
+    V.pause();
+    let best=1e9;
+    for(let i=1;i<ts.length;i++){const d=ts[i]-ts[i-1]; if(d>1e-4&&d<best) best=d}
+    if(best<1e8){const fps=1/best; const std=[24,25,30,50,60,120]; let b=30,bd=1e9;
+      for(const s of std){const d=Math.abs(s-fps); if(d<bd){bd=d;b=s}} if(bd<2.5) dt=1/b;}
+  }catch(e){}
+  try{V.pause()}catch(e){}
+}
+
+/* ---------- traženje sličice (točno vrijeme prikaza) ---------- */
+function seekTo(t){
+  return new Promise(res=>{
+    t=Math.max(0,Math.min(dur,t)); try{V.pause()}catch(e){}
+    let done=false;
+    const fin=mt=>{if(done)return;done=true;V.removeEventListener('seeked',onS);res(mt)};
+    const onS=()=>{
+      // nakon 'seeked' pričekaj sličicu koja je stvarno prikazana i uzmi njezino točno vrijeme
+      if(V.requestVideoFrameCallback){
+        let got=false;
+        V.requestVideoFrameCallback((n,m)=>{got=true;fin(m.mediaTime)});
+        setTimeout(()=>{ if(!got) fin(V.currentTime) },250);
+      } else fin(V.currentTime);
+    };
+    V.addEventListener('seeked',onS);
+    setTimeout(()=>fin(V.currentTime),4000);
+    if(Math.abs(V.currentTime-t)<1e-7){ V.currentTime=t+1e-4 }   // isti trenutak: izazovi novi seek
+    else V.currentTime=t;
+  });
+}
+function drawView(){vctx.drawImage(V,0,0,view.width,view.height)}
+async function goTo(t){
+  if(seekBusy){pendingSeek=t;return}
+  seekBusy=true;
+  try{
+    let target=t;
+    while(true){
+      pendingSeek=null;
+      curT=await seekTo(target); drawView();
+      $('slider').value=Math.round(curT*1000); updateInfo();
+      if(pendingSeek===null) break; target=pendingSeek;
+    }
+  } finally{seekBusy=false}
+}
+$('slider').addEventListener('input',e=>{ if(vw) goTo(e.target.value/1000) });
+document.querySelectorAll('[data-step]').forEach(b=>b.addEventListener('click',()=>{
+  if(!vw) return; const n=parseInt(b.dataset.step); goTo(curT+n*dt+0.25*dt);
+}));
+
+/* ---------- unos videa ---------- */
+async function onFile(f){
+  if(!f) return;
+  $('vinfo').textContent='Učitavam…';
+  try{await loadBlob(f,f.name||'snimka')}catch(e){$('vinfo').textContent='Greška: '+e.message}
+}
+$('inCam').addEventListener('change',e=>{onFile(e.target.files[0]);e.target.value=''});
+$('inFile').addEventListener('change',e=>{onFile(e.target.files[0]);e.target.value=''});
+$('fpsSel').addEventListener('change',()=>{ if(vw){ if($('fpsSel').value==='auto') detectFps().then(updateInfo); else {dt=1/parseFloat($('fpsSel').value);updateInfo()} } });
+$('fIn').addEventListener('change',()=>{updateInfo(); try{localStorage.removeItem('fnorm')}catch(e){}});
+
+/* ---------- označavanje: dodir -> zoom -> pravokutnik ---------- */
+const zoom=$('zoom'), zctx=zoom.getContext('2d');
+let zs=null; // {sx,sy,zw,zh,k, rect:{x,y,w,h} u izvornim px, base}
+function openZoom(cx,cy){
+  const base=Math.max(150,Math.round(vw*0.06));
+  zs={cx,cy,zf:1,base,rect:null};
+  $('zOk').disabled=true; $('zInfo').textContent='Povucite prstom po slici.';
+  $('ovMark').classList.add('on'); zoomLayout(); zoomDraw();
+}
+function zoomLayout(){
+  const zw=Math.round(zs.base*zs.zf), zh=Math.round(zw*0.75);
+  let sx=Math.round(zs.cx-zw/2), sy=Math.round(zs.cy-zh/2);
+  sx=Math.max(0,Math.min(vw-zw,sx)); sy=Math.max(0,Math.min(vh-zh,sy));
+  zs.sx=sx; zs.sy=sy; zs.zw=zw; zs.zh=zh; zs.k=zoom.width/zw;
+  zoom.height=Math.round(zoom.width*zh/zw);
+}
+function zoomDraw(){
+  zctx.imageSmoothingEnabled=true;
+  zctx.drawImage(V,zs.sx,zs.sy,zs.zw,zs.zh,0,0,zoom.width,zoom.height);
+  const r=zs.rect;
+  if(r){
+    zctx.strokeStyle='#3ecf8e'; zctx.lineWidth=2;
+    zctx.strokeRect((r.x-zs.sx)*zs.k,(r.y-zs.sy)*zs.k,r.w*zs.k,r.h*zs.k);
+  }
+}
+function zoomInfo(){
+  const r=zs.rect; if(!r) return;
+  $('zInfo').textContent=`Širina pločice: ${fmt(r.w,1)} px, visina ${fmt(r.h,1)} px (omjer ${fmt(r.w/r.h,1)}, očekivano ≈ 4,7)`;
+  $('zOk').disabled=false;
+}
+function zpos(e){
+  const b=zoom.getBoundingClientRect();
+  return {x:zs.sx+(e.clientX-b.left)/b.width*zs.zw, y:zs.sy+(e.clientY-b.top)/b.height*zs.zh};
+}
+let drag=null;
+zoom.addEventListener('pointerdown',e=>{ if(!zs) return; zoom.setPointerCapture(e.pointerId); drag=zpos(e); zs.rect={x:drag.x,y:drag.y,w:1,h:1}; zoomDraw(); e.preventDefault()});
+zoom.addEventListener('pointermove',e=>{ if(!drag) return; const p=zpos(e);
+  zs.rect={x:Math.min(drag.x,p.x),y:Math.min(drag.y,p.y),w:Math.max(1,Math.abs(p.x-drag.x)),h:Math.max(1,Math.abs(p.y-drag.y))};
+  zoomDraw(); zoomInfo(); e.preventDefault()});
+const endDrag=e=>{drag=null};
+zoom.addEventListener('pointerup',endDrag); zoom.addEventListener('pointercancel',endDrag);
+document.querySelectorAll('[data-nudge]').forEach(b=>b.addEventListener('click',()=>{
+  const r=zs&&zs.rect; if(!r) return; const n=b.dataset.nudge, a=r.w/r.h;
+  if(n==='l') r.x-=1; else if(n==='r') r.x+=1; else if(n==='u') r.y-=1; else if(n==='d') r.y+=1;
+  else if(n==='w+'){const cx=r.x+r.w/2,cy=r.y+r.h/2; r.w+=1; r.h=r.w/a; r.x=cx-r.w/2; r.y=cy-r.h/2}
+  else if(n==='w-'&&r.w>6){const cx=r.x+r.w/2,cy=r.y+r.h/2; r.w-=1; r.h=r.w/a; r.x=cx-r.w/2; r.y=cy-r.h/2}
+  zoomDraw(); zoomInfo();
+}));
+$('zIn').addEventListener('click',()=>{zs.zf=Math.max(0.4,zs.zf/1.4); keepZoom()});
+$('zOut').addEventListener('click',()=>{zs.zf=Math.min(6,zs.zf*1.4); keepZoom()});
+function keepZoom(){zoomLayout(); zoomDraw()}
+$('zCancel').addEventListener('click',()=>{$('ovMark').classList.remove('on'); zs=null; calMode=false});
+$('zOk').addEventListener('click',()=>{
+  const r=zs.rect; $('ovMark').classList.remove('on');
+  const rect={cx:r.x+r.w/2,cy:r.y+r.h/2,w:r.w,h:r.h}; zs=null;
+  if(calMode){calMode=false; doCalibrate(rect)} else startMeasure(curT,rect);
+});
+// dodir na glavnu sliku
+let tapStart=null;
+view.addEventListener('pointerdown',e=>{tapStart={x:e.clientX,y:e.clientY}});
+view.addEventListener('pointerup',e=>{
+  if(!vw||!tapStart) return;
+  if(Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)>10){tapStart=null;return}
+  tapStart=null;
+  const b=view.getBoundingClientRect();
+  openZoom((e.clientX-b.left)/b.width*vw,(e.clientY-b.top)/b.height*vh);
+});
+
+/* ---------- praćenje pločice (NCC + skala), kao u računalnom programu ---------- */
+const tmpC=document.createElement('canvas'); const tmpX=tmpC.getContext('2d',{willReadFrequently:true});
+function grab(x0,y0,x1,y1){
+  x0=Math.max(0,Math.floor(x0)); y0=Math.max(0,Math.floor(y0)); x1=Math.min(vw,Math.ceil(x1)); y1=Math.min(vh,Math.ceil(y1));
+  const w=x1-x0,h=y1-y0; if(w<8||h<8) return null;
+  tmpC.width=w; tmpC.height=h; tmpX.drawImage(V,x0,y0,w,h,0,0,w,h);
+  const d=tmpX.getImageData(0,0,w,h).data, g=new Float32Array(w*h);
+  for(let i=0,k=0;k<g.length;k++,i+=4) g[k]=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+  return {x0,y0,w,h,g};
+}
+function sampleBil(roi,X,Y){ // X,Y: globalne kontinuirane koordinate (piksel k pokriva [k,k+1))
+  const gx=X-roi.x0-0.5, gy=Y-roi.y0-0.5, x=Math.floor(gx), y=Math.floor(gy);
+  if(x<0||y<0||x+1>=roi.w||y+1>=roi.h) return NaN;
+  const fx=gx-x, fy=gy-y, o=y*roi.w+x, g=roi.g;
+  return (g[o]*(1-fx)+g[o+1]*fx)*(1-fy)+(g[o+roi.w]*(1-fx)+g[o+roi.w+1]*fx)*fy;
+}
+function makeTemplate(roi,cx,cy,W,H){
+  const tw=Math.max(8,Math.round(W)), th=Math.max(4,Math.round(H));
+  const raw=new Float32Array(tw*th); const px=W/tw, py=H/th, X0=cx-W/2, Y0=cy-H/2;
+  for(let j=0;j<th;j++) for(let i=0;i<tw;i++){
+    const v=sampleBil(roi,X0+(i+0.5)*px,Y0+(j+0.5)*py); if(Number.isNaN(v)) return null; raw[j*tw+i]=v;
+  }
+  const mk=(sub)=>{const a=[]; for(let j=0;j<th;j+=sub) for(let i=0;i<tw;i+=sub) a.push(raw[j*tw+i]);
+    let m=0; for(const v of a) m+=v; m/=a.length; let ss=0; const d=new Float32Array(a.length);
+    for(let k=0;k<a.length;k++){d[k]=a[k]-m; ss+=d[k]*d[k]} return {d,ss:Math.sqrt(ss)+1e-6,n:a.length}};
+  return {tw,th,t1:mk(1),t2:mk(2)};
+}
+function nccAt(roi,T,sub,cx,cy,Ws,Hs){
+  const A=sub===1?T.t1:T.t2, tw=T.tw, th=T.th, px=Ws/tw, py=Hs/th;
+  const X0=cx-Ws/2-roi.x0-0.5, Y0=cy-Hs/2-roi.y0-0.5, gw=roi.w, gh=roi.h, g=roi.g, d=A.d;
+  let k=0,sv=0,svv=0,stv=0;
+  for(let j=0;j<th;j+=sub){
+    const Y=Y0+(j+0.5)*py, y=Math.floor(Y); if(y<0||y+1>=gh) return -1; const fy=Y-y, gy=1-fy;
+    for(let i=0;i<tw;i+=sub){
+      const X=X0+(i+0.5)*px, x=Math.floor(X); if(x<0||x+1>=gw) return -1; const fx=X-x, o=y*gw+x;
+      const v=(g[o]*(1-fx)+g[o+1]*fx)*gy+(g[o+gw]*(1-fx)+g[o+gw+1]*fx)*fy;
+      sv+=v; svv+=v*v; stv+=d[k++]*v;
+    }
+  }
+  const n=A.n, vs=svv-sv*sv/n; if(vs<1e-6) return -1;
+  return stv/(A.ss*Math.sqrt(vs));
+}
+function frameDone(){return new Promise(r=>setTimeout(r,0))}
+
+/* Snimanje niza sličica reprodukcijom (točno vrijeme svake sličice) u memoriju – samo zona oko pločice */
+function plan(rect){
+  const ppx=vw/2, ppy=vh/2, W0=rect.w, M=Math.max(220,Math.round(2.2*W0));
+  const pts=[[rect.cx,rect.cy]];
+  for(const f of [30/W0,Math.min(3,260/W0)]) pts.push([ppx+(rect.cx-ppx)*f, ppy+(rect.cy-ppy)*f]);
+  let x0=Math.min(...pts.map(p=>p[0]))-M, x1=Math.max(...pts.map(p=>p[0]))+M;
+  let y0=Math.min(...pts.map(p=>p[1]))-M*0.6, y1=Math.max(...pts.map(p=>p[1]))+M*0.6;
+  x0=Math.max(0,Math.floor(x0)); y0=Math.max(0,Math.floor(y0)); x1=Math.min(vw,Math.ceil(x1)); y1=Math.min(vh,Math.ceil(y1));
+  return {x0,y0,w:x1-x0,h:y1-y0};
+}
+async function captureFrames(tS,tE,box,ctl){
+  const frames=[];
+  const c=document.createElement('canvas'); c.width=box.w; c.height=box.h; const x=c.getContext('2d',{willReadFrequently:true});
+  await new Promise(r=>{V.onseeked=()=>{V.onseeked=null;r()}; V.currentTime=Math.max(0,tS)});
+  V.playbackRate=ctl.rate||0.5; V.muted=true;
+  await new Promise(async res=>{
+    let lastT=-1;
+    const take=(t)=>{
+      if(t<tS-dt*0.6||t<=lastT+1e-5) return; lastT=t;
+      x.drawImage(V,box.x0,box.y0,box.w,box.h,0,0,box.w,box.h);
+      const d=x.getImageData(0,0,box.w,box.h).data, g=new Uint8Array(box.w*box.h);
+      for(let i=0,k=0;k<g.length;k++,i+=4) g[k]=(77*d[i]+150*d[i+1]+29*d[i+2])>>8;
+      frames.push({t,g});
+      ctl.onCap&&ctl.onCap(frames.length,(t-tS)/(tE-tS||1));
+    };
+    const stop=(why)=>{window.__stop=[why,V.currentTime,V.ended,ctl.cancel,tE,performance.now()];try{V.pause()}catch(e){} res()};
+    const cb=(now,m)=>{ take(m.mediaTime); if(m.mediaTime>=tE||ctl.cancel||V.ended) stop('cb'); else V.requestVideoFrameCallback(cb) };
+    const cbRaf=()=>{ take(V.currentTime); if(V.currentTime>=tE||ctl.cancel||V.ended) stop(); else requestAnimationFrame(cbRaf) };
+    try{await V.play()}catch(e){res();return}
+    if(V.requestVideoFrameCallback) V.requestVideoFrameCallback(cb); else requestAnimationFrame(cbRaf);
+    setTimeout(()=>stop('timeout'),((tE-tS)/(ctl.rate||0.5)+8)*1000);
+  });
+  return frames;
+}
+function roiOf(fr,box,x0,y0,x1,y1){
+  x0=Math.max(box.x0,Math.floor(x0)); y0=Math.max(box.y0,Math.floor(y0)); x1=Math.min(box.x0+box.w,Math.ceil(x1)); y1=Math.min(box.y0+box.h,Math.ceil(y1));
+  const w=x1-x0,h=y1-y0; if(w<8||h<8) return null; const g=new Float32Array(w*h);
+  for(let j=0;j<h;j++){ const so=(y0-box.y0+j)*box.w+(x0-box.x0), dO=j*w; for(let i=0;i<w;i++) g[dO+i]=fr.g[so+i]; }
+  return {x0,y0,w,h,g};
+}
+/* referentna sličica: ona od najbližih koja se najbolje poklapa s oznakom (vrijeme 'seek'a nije posve pouzdano) */
+function pickRef(frames,box,t0,refRoi,rect){
+  const T=makeTemplate(refRoi,rect.cx,rect.cy,rect.w,rect.h); if(!T) return null;
+  let bi=-1,bd=1e9; frames.forEach((f,i)=>{const d=Math.abs(f.t-t0); if(d<bd){bd=d;bi=i}});
+  let best={n:-2,i:bi};
+  for(let i=Math.max(0,bi-2);i<=Math.min(frames.length-1,bi+2);i++){
+    const roi=roiOf(frames[i],box,rect.cx-rect.w,rect.cy-rect.h*4,rect.cx+rect.w,rect.cy+rect.h*4); if(!roi) continue;
+    for(let dy=-3;dy<=3;dy++) for(let dx=-3;dx<=3;dx++){ const c=nccAt(roi,T,2,rect.cx+dx,rect.cy+dy,rect.w,rect.h); if(c>best.n) best={n:c,i,dx,dy}; }
+  }
+  return best.n>0.5?best:{n:best.n,i:bi,dx:0,dy:0};
+}
+
+async function trackDir(frames,box,refIdx,rect,dir,ctl){
+  const aspect=rect.w/rect.h, out=[];
+  let st={cx:rect.cx+(ctl.refdx||0),cy:rect.cy+(ctl.refdy||0),W:rect.w,H:rect.h,vx:0,vy:0};
+  let roi=roiOf(frames[refIdx],box,st.cx-st.W,st.cy-st.H*3,st.cx+st.W,st.cy+st.H*3); if(!roi) return out;
+  let T=makeTemplate(roi,st.cx,st.cy,st.W,st.H); if(!T) return out;
+  let fails=0;
+  const scales=[]; for(let s=1;s>=0.859;s-=0.02) scales.push(dir<0?s:2-s);
+  for(let idx=refIdx+dir;idx>=0&&idx<frames.length&&!ctl.cancel;idx+=dir){
+    const fr=frames[idx], tt=fr.t;
+    const mx=Math.max(10,0.3*st.W)|0, my=Math.max(6,0.6*st.H)|0;
+    const pcx=st.cx+st.vx, pcy=st.cy+st.vy, smax=dir<0?1.03:1.17;
+    const ex=st.W*smax/2+mx+8, ey=st.H*smax/2+my+8;
+    roi=roiOf(fr,box,pcx-ex,pcy-ey,pcx+ex,pcy+ey); if(!roi) break;
+    let best={n:-2,s:1,dx:0,dy:0};
+    for(const s of scales){
+      const Ws=st.W*s,Hs=st.H*s;
+      for(let dy=-my;dy<=my;dy++) for(let dx=-mx;dx<=mx;dx++){
+        const c=nccAt(roi,T,2,pcx+dx,pcy+dy,Ws,Hs); if(c>best.n) best={n:c,s,dx,dy};
+      }
+    }
+    if(best.n<0.35) break;
+    let fine=best;
+    for(let ds=-0.02;ds<=0.0201;ds+=0.004){ const s=best.s+ds; if(s>smax||s<0.84) continue;
+      for(let dy=-1.5;dy<=1.51;dy+=0.5) for(let dx=-1.5;dx<=1.51;dx+=0.5){
+        const c=nccAt(roi,T,1,pcx+best.dx+dx,pcy+best.dy+dy,st.W*s,st.H*s); if(c>fine.n) fine={n:c,s,dx:best.dx+dx,dy:best.dy+dy};
+      }}
+    if(fine.n<0.55){ if(++fails>=2) break; else continue } fails=0;
+    const ncx=pcx+fine.dx, ncy=pcy+fine.dy, nW=st.W*fine.s, nH=st.H*fine.s;
+    const nT=makeTemplate(roi,ncx,ncy,nW,nH); if(!nT) break;
+    st={cx:ncx,cy:ncy,W:nW,H:nH,vx:0.5*(ncx-st.cx)+0.5*st.vx,vy:0.5*(ncy-st.cy)+0.5*st.vy};
+    T=nT;
+    out.push({t:tt,W:nW,cx:ncx,cy:ncy,ncc:fine.n});
+    ctl.onStep&&ctl.onStep(dir,out.length,nW);
+    if(dir<0&&nW<30) break; if(dir>0&&nW>270) break;
+    if(out.length%4===0) await frameDone();
+  }
+  return out;
+}
+
+function theilSen(x,y){
+  const s=[]; for(let i=0;i<x.length;i++) for(let j=i+1;j<x.length;j++){ const dx=x[j]-x[i]; if(Math.abs(dx)>1e-6) s.push((y[j]-y[i])/dx); }
+  if(!s.length) return NaN; s.sort((a,b)=>a-b); const m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2;
+}
+function speedOf(pts,f,wmin){
+  const u=pts.filter(p=>p.W>=wmin&&p.ncc>=0.6); if(u.length<6) return null;
+  const t=u.map(p=>p.t), Z=u.map(p=>f*EU_PLATE_M/p.W);
+  const sl=theilSen(t,Z); if(!Number.isFinite(sl)) return null;
+  const v=-sl*3.6; // km/h
+  const sorted=Z.map((z,i)=>z-(Z[0]+sl*(t[i]-t[0]))); const c=sorted.sort((a,b)=>a-b)[sorted.length>>1];
+  const res=u.map((p,i)=>Math.abs(Z[i]-(Z[0]+c+sl*(t[i]-t[0])))).sort((a,b)=>a-b);
+  return {v,n:u.length,Zmin:Math.min(...Z),Zmax:Math.max(...Z),Wmin:Math.min(...u.map(p=>p.W)),Wmax:Math.max(...u.map(p=>p.W)),resid:res[res.length>>1],slope:sl,Z0:Z[0]+c,t0:t[0]};
+}
+
+/* ---------- mjerenje ---------- */
+let ctl=null;
+async function startMeasure(t0,rect){
+  ctl={cancel:false,rate:0.25}; $('ovProg').classList.add('on'); $('pBar').value=0;
+  $('pTitle').textContent='1/2 · Čitam sličice oko pločice (video se reproducira polako)…'; $('pTxt').textContent='';
+  const t1=performance.now();
+  const refRoi=grab(rect.cx-rect.w*1.5,rect.cy-rect.h*6,rect.cx+rect.w*1.5,rect.cy+rect.h*6);  // sličica koja je sada prikazana
+  const box=plan(rect), tS=Math.max(0,t0-5.5), tE=Math.min(dur,t0+2.5);
+  ctl.onCap=(n,p)=>{ $('pBar').value=Math.round(p*100); $('pTxt').textContent=`${n} sličica pročitano`; };
+  try{
+    const frames=await captureFrames(tS,tE,box,ctl);
+    if(frames.length<5||!refRoi) throw new Error('Nije pročitano dovoljno sličica (preglednik nije dao okvire videa). '+frames.length+' sl., ref='+!!refRoi);
+    // stvarni korak sličica iz izmjerenih vremena
+    const d=[]; for(let i=1;i<frames.length;i++) d.push(frames[i].t-frames[i-1].t); d.sort((a,b)=>a-b); const med=d[d.length>>1]; if(med>0.004) dt=med;
+    const ref=pickRef(frames,box,t0,refRoi,rect);
+    if(!ref) throw new Error('Oznaka pločice nije pronađena u pročitanim sličicama.');
+    ctl.refdx=ref.dx||0; ctl.refdy=ref.dy||0;
+    $('pTitle').textContent='2/2 · Pratim pločicu unatrag i naprijed…'; $('pBar').removeAttribute('value');
+    let nb=0,nf=0; ctl.onStep=(dir,n,W)=>{ if(dir<0) nb=n; else nf=n; $('pTxt').textContent=`unatrag: ${nb} sličica, naprijed: ${nf} sličica, širina ${fmt(W,0)} px`};
+    await frameDone();
+    const back=ctl.cancel?[]:await trackDir(frames,box,ref.i,rect,-1,ctl);
+    const fwd=ctl.cancel?[]:await trackDir(frames,box,ref.i,rect,+1,ctl);
+    const pts=[...back,{t:frames[ref.i].t,W:rect.w,cx:rect.cx+ctl.refdx,cy:rect.cy+ctl.refdy,ncc:ref.n},...fwd].sort((a,b)=>a.t-b.t);
+    ctl.secs=(performance.now()-t1)/1000; ctl.nframes=frames.length;
+    finishMeasure(pts,rect,frames[ref.i].t,ctl.cancel);
+  }catch(e){ $('pTxt').textContent='Greška: '+e.message; console.error(e); await sleep(2500) }
+  $('ovProg').classList.remove('on');
+  try{ await seekTo(t0); curT=t0; drawView(); }catch(e){}
+}
+$('pCancel').addEventListener('click',()=>{ if(ctl) ctl.cancel=true });
+
+function finishMeasure(pts,rect,t0,cancelled){
+  const f=curF();
+  const all=speedOf(pts,f,35), near=speedOf(pts,f,60);
+  lastResult={pts,rect,t0,f,all,near,name:srcName,time:new Date().toISOString(),secs:ctl&&ctl.secs};
+  showResult(lastResult,cancelled);
+  window.__last=lastResult;
+}
+function showResult(r,cancelled){
+  const has=!!r;
+  $('resEmpty').classList.toggle('hide',has); $('resBox').classList.toggle('hide',!has);
+  if(!has) return;
+  const a=r.all, n=r.near; const warn=[];
+  if(!a){ $('rSpeed').textContent='–'; $('rNote').textContent='Premalo upotrebljivih sličica (potrebno je da pločica bude ≥ 35 px široka).';
+    ['rNear','rDist','rPts','rW'].forEach(i=>$(i).textContent='–'); drawGraph(r); $('rWarn').innerHTML='<div class="msg bad">Označite pločicu na sličici gdje je vozilo bliže ili jasnije vidljivo, pa ponovite.</div>'; return }
+  $('rSpeed').textContent=fmt(a.v,0);
+  $('rNote').textContent=`≈ ${fmt(a.v*0.9,0)}–${fmt(a.v*1.1,0)} km/h (±10 %) · f=${fmt(r.f,0)} px`;
+  $('rNear').textContent=n?fmt(n.v,0):'–';
+  $('rDist').textContent=`${fmt(a.Zmax,1)} → ${fmt(a.Zmin,1)}`;
+  $('rPts').textContent=a.n; $('rW').textContent=`${fmt(a.Wmin,0)} → ${fmt(a.Wmax,0)}`;
+  let h='';
+  if(a.v<0) h+='<div class="msg bad">Negativna brzina: vozilo se udaljava ili je označena pločica pogrešna.</div>';
+  if(a.resid>0.5) h+='<div class="msg warn">Podaci se slabo uklapaju u pravac (medijan odstupanja '+fmt(a.resid,2)+' m) – provjerite označavanje pločice.</div>';
+  if(n&&Math.abs(n.v-a.v)>0.25*a.v) h+='<div class="msg warn">Brzina pri kraju se znatno razlikuje od ukupne – vozilo je ubrzavalo ili kočilo, ili je praćenje griješilo.</div>';
+  if(Math.max(vw,vh)<3600) h+='<div class="msg warn">Snimka nije 4K: pločica daleko od kamere je premalena za pouzdanu brzinu.</div>';
+  if(cancelled) h+='<div class="msg warn">Mjerenje je prekinuto – rezultat je djelomičan.</div>';
+  $('rWarn').innerHTML=h;
+  drawGraph(r);
+}
+function drawGraph(r){
+  const c=$('graph'), x=c.getContext('2d'), W=c.width, H=c.height; x.clearRect(0,0,W,H);
+  const pts=r.pts.filter(p=>p.W>=22); if(pts.length<2) return;
+  const f=r.f, t=pts.map(p=>p.t), Z=pts.map(p=>f*EU_PLATE_M/p.W);
+  const t0=Math.min(...t), t1=Math.max(...t), zmax=Math.max(...Z)*1.05, zmin=0;
+  const L=46,R=10,T=12,B=26, sx=u=>L+(u-t0)/(t1-t0||1)*(W-L-R), sy=z=>T+(1-(z-zmin)/(zmax-zmin))*(H-T-B);
+  x.strokeStyle='#2c343f'; x.fillStyle='#93a0ad'; x.font='12px system-ui'; x.lineWidth=1;
+  for(let i=0;i<=4;i++){const z=zmin+(zmax-zmin)*i/4; x.beginPath();x.moveTo(L,sy(z));x.lineTo(W-R,sy(z));x.stroke(); x.fillText(z.toFixed(0)+' m',4,sy(z)+4)}
+  x.fillText('t (s)',W-40,H-6); x.fillText(t0.toFixed(1),L,H-6);
+  pts.forEach((p,i)=>{ const good=p.W>=35; x.fillStyle=good?'#4ea1ff':'#5b6672'; x.beginPath(); x.arc(sx(t[i]),sy(Z[i]),2.6,0,7); x.fill() });
+  if(r.all){ x.strokeStyle='#3ecf8e'; x.lineWidth=2; x.beginPath();
+    const a=r.all; const tt0=a.t0, z0=a.Z0;
+    x.moveTo(sx(t0),sy(z0+a.slope*(t0-tt0))); x.lineTo(sx(t1),sy(z0+a.slope*(t1-tt0))); x.stroke(); }
+}
+
+/* ---------- popis, CSV ---------- */
+$('btnAdd').addEventListener('click',()=>{
+  if(!lastResult||!lastResult.all) return;
+  results.push({reg:$('reg').value.trim(),v:lastResult.all.v,near:lastResult.near?lastResult.near.v:NaN,time:lastResult.time,file:lastResult.name,t0:lastResult.t0});
+  $('reg').value=''; renderList();
+});
+function renderList(){
+  const tb=$('tbl').querySelector('tbody'); tb.innerHTML='';
+  results.forEach((r,i)=>{const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td><td>${r.reg||'–'}</td><td>${fmt(r.v,0)}</td><td>${fmt(r.near,0)}</td><td>${new Date(r.time).toLocaleTimeString('hr')}</td>`; tb.appendChild(tr)});
+  $('tbl').classList.toggle('hide',!results.length); $('listEmpty').classList.toggle('hide',!!results.length);
+}
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000)}
+$('btnCsv').addEventListener('click',()=>{
+  const rows=[['Redni broj','Registracija','Brzina km/h','Brzina pri kraju km/h','Datum i vrijeme','Datoteka','t (s)']];
+  results.forEach((r,i)=>rows.push([i+1,r.reg,fmt(r.v,1),fmt(r.near,1),r.time,r.file,fmt(r.t0,2)]));
+  download(new Blob(['﻿'+rows.map(r=>r.join(';')).join('\n')],{type:'text/csv'}),'brzine.csv');
+});
+$('btnClear').addEventListener('click',()=>{ if(confirm('Obrisati cijeli popis?')){results=[];renderList()} });
+
+/* ---------- kalibracija ---------- */
+function loadCal(){ try{const n=parseFloat(localStorage.getItem('fnorm')); if(n>0){ $('fIn').value=Math.round(n*3840); $('calInfo').textContent=`Spremljena kalibracija: f ≈ ${Math.round(n*3840)} px (na 4K širini).` } }catch(e){} }
+$('btnCal').addEventListener('click',()=>{ if(!vw){alert('Prvo učitajte snimku na kojoj je auto na poznatoj udaljenosti.');return}
+  calMode=true; alert('Listajte do sličice gdje je auto na poznatoj udaljenosti (npr. 10 m) i dodirnite pločicu.') });
+function doCalibrate(rect){
+  const D=parseFloat(prompt('Udaljenost pločice od kamere u metrima:','10')); if(!(D>0)) return;
+  const f=rect.w*D/EU_PLATE_M, fn=f/Math.max(vw,vh);
+  try{localStorage.setItem('fnorm',fn)}catch(e){}
+  $('fIn').value=Math.round(fn*3840); $('calInfo').textContent=`Kalibrirano: f ≈ ${Math.round(fn*3840)} px (na 4K širini), iz širine ${fmt(rect.w,1)} px na ${D} m.`; updateInfo();
+}
+$('btnCalReset').addEventListener('click',()=>{ try{localStorage.removeItem('fnorm')}catch(e){} $('fIn').value=2900; $('calInfo').textContent='Vraćeno zadano (2900 px).'; updateInfo() });
+loadCal();
+
+/* ---------- video s podacima ---------- */
+$('btnExport').addEventListener('click',async()=>{
+  const r=lastResult; if(!r||!r.all||!window.MediaRecorder){alert('Izvoz videa nije podržan u ovom pregledniku.');return}
+  const pts=r.pts, tS=Math.max(0,pts[0].t-0.3), tE=Math.min(dur,pts[pts.length-1].t+0.4);
+  const cw=Math.min(1280,vw), ch=Math.round(cw*vh/vw), cv=document.createElement('canvas'); cv.width=cw; cv.height=ch; const cx=cv.getContext('2d');
+  const sc=cw/vw, reg=$('reg').value.trim();
+  ctl={cancel:false}; $('ovProg').classList.add('on'); $('pTitle').textContent='Snimam video s podacima (traje koliko i isječak)…'; $('pBar').value=0; $('pTxt').textContent='';
+  const mt=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=>MediaRecorder.isTypeSupported(m))||'';
+  const stream=cv.captureStream(30), rec=new MediaRecorder(stream,mt?{mimeType:mt,videoBitsPerSecond:8e6}:undefined), chunks=[];
+  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  const done=new Promise(res=>rec.onstop=res);
+  await seekTo(tS); V.playbackRate=1; rec.start(250);
+  const near=t=>{let b=pts[0],bd=1e9; for(const p of pts){const d=Math.abs(p.t-t); if(d<bd){bd=d;b=p}} return b};
+  await new Promise(async res=>{
+    const draw=(now,meta)=>{
+      const t=meta?meta.mediaTime:V.currentTime; cx.drawImage(V,0,0,cw,ch);
+      const p=near(t), inRange=t>=pts[0].t-dt&&t<=pts[pts.length-1].t+dt;
+      if(inRange){ const w=p.W*sc,h=w/(r.rect.w/r.rect.h); cx.strokeStyle='#3ecf8e'; cx.lineWidth=Math.max(2,cw/400); cx.strokeRect(p.cx*sc-w/2,p.cy*sc-h/2,w,h);
+        cx.fillStyle='#3ecf8e'; cx.font=`bold ${Math.round(cw/45)}px system-ui`; cx.fillText(`${(r.f*EU_PLATE_M/p.W).toFixed(1)} m`,p.cx*sc-w/2,p.cy*sc-h/2-8) }
+      const fs=Math.round(cw/16); cx.fillStyle='#000a'; cx.fillRect(0,0,cw,fs*1.9);
+      cx.fillStyle='#fff'; cx.font=`bold ${fs}px system-ui`; cx.fillText(`${r.all.v.toFixed(0)} km/h`,fs*0.4,fs*1.2);
+      cx.font=`${Math.round(fs*0.42)}px system-ui`; cx.fillStyle='#cfd8e0';
+      cx.fillText(`${reg?reg+'  ·  ':''}±10 %  ·  t=${t.toFixed(2)} s`,fs*0.4,fs*1.7);
+      $('pBar').value=Math.min(100,100*(t-tS)/(tE-tS||1));
+      if(t>=tE-1e-3||ctl.cancel||V.ended){V.pause();res()} else if(V.requestVideoFrameCallback) V.requestVideoFrameCallback(draw); else requestAnimationFrame(()=>draw());
+    };
+    try{await V.play()}catch(e){res();return}
+    if(V.requestVideoFrameCallback) V.requestVideoFrameCallback(draw); else requestAnimationFrame(()=>draw());
+  });
+  rec.stop(); await done; stream.getTracks().forEach(t=>t.stop());
+  $('ovProg').classList.remove('on');
+  download(new Blob(chunks,{type:'video/webm'}),`brzina_${r.all.v.toFixed(0)}kmh.webm`);
+  await seekTo(r.t0); drawView();
+});
+
+/* ---------- snimanje u stranici ---------- */
+let camStream=null,camRec=null,camChunks=[];
+$('btnRec').addEventListener('click',async()=>{
+  if(!navigator.mediaDevices||!window.MediaRecorder){alert('Snimanje u stranici nije podržano. Koristite „Snimi kamerom“.');return}
+  $('ovRec').classList.add('on'); $('camStart').classList.remove('hide'); $('camStop').classList.add('hide'); $('camInfo').textContent='Pokrećem kameru…';
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160},frameRate:{ideal:30}},audio:false});
+    $('camPrev').srcObject=camStream; const s=camStream.getVideoTracks()[0].getSettings();
+    $('camInfo').textContent=`Kamera: ${s.width}×${s.height} @ ${Math.round(s.frameRate||0)} sl/s`+((s.width||0)<3000?'  ⚠ preglednik nije dao 4K – za bolju točnost koristite „Snimi kamerom“ (obična kamera telefona).':'');
+  }catch(e){$('camInfo').textContent='Kamera nije dostupna: '+e.message}
+});
+$('camStart').addEventListener('click',()=>{
+  if(!camStream) return; camChunks=[];
+  const mt=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=>MediaRecorder.isTypeSupported(m))||'';
+  camRec=new MediaRecorder(camStream,mt?{mimeType:mt,videoBitsPerSecond:40e6}:undefined);
+  camRec.ondataavailable=e=>{if(e.data.size)camChunks.push(e.data)};
+  camRec.onstop=async()=>{ const b=new Blob(camChunks,{type:'video/webm'}); closeCam(); await onFile(new File([b],'snimka_'+Date.now()+'.webm',{type:'video/webm'})) };
+  camRec.start(500); $('camStart').classList.add('hide'); $('camStop').classList.remove('hide'); $('camInfo').textContent='● Snimam…';
+});
+$('camStop').addEventListener('click',()=>{ if(camRec&&camRec.state!=='inactive') camRec.stop() });
+function closeCam(){ $('ovRec').classList.remove('on'); if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null} $('camPrev').srcObject=null }
+$('camClose').addEventListener('click',()=>{ if(camRec&&camRec.state==='recording'){camRec.onstop=null;camRec.stop()} closeCam() });
+
+if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+/* pomoćnik za automatsko testiranje */
+window.__api={measure:(t,rect)=>startMeasure(t,rect).then(()=>window.__last),seek:async t=>{curT=await seekTo(t);drawView();return curT},info:()=>({vw,vh,dur,dt,f:curF()})};
+</script>
+</body>
+</html>

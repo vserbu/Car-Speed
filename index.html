@@ -166,7 +166,7 @@
 
 <!-- Zoom za označavanje -->
 <div id="ovMark" class="overlay"><div class="panel">
-  <div class="info" id="zHint">Povucite pravokutnik oko pločice – od ruba do ruba (i plavi pojas lijevo). Tipke ispod služe za fino namještanje.</div>
+  <div class="info" id="zHint">Povucite pravokutnik oko pločice – od ruba do ruba (i plavi pojas lijevo). Bijele točke na rubovima mijenjaju veličinu, a povlačenje unutar okvira ga pomiče. Tipke ispod služe za fino namještanje.</div>
   <div id="zoomWrap"><canvas id="zoom" width="800" height="600"></canvas></div>
   <div class="info" id="zInfo" style="margin:6px 0">Povucite prstom po slici.</div>
   <div class="row nf">
@@ -358,6 +358,8 @@ function zoomDraw(){
   if(r){
     zctx.strokeStyle='#3ecf8e'; zctx.lineWidth=2;
     zctx.strokeRect((r.x-zs.sx)*zs.k,(r.y-zs.sy)*zs.k,r.w*zs.k,r.h*zs.k);
+    if(r.w>1){ const hs=Math.max(7,zoom.width/60); zctx.fillStyle='#fff'; zctx.strokeStyle='#04111f'; zctx.lineWidth=1.5;
+      for(const h of HANDLES){const q=hpos(r,h), X=(q.x-zs.sx)*zs.k, Y=(q.y-zs.sy)*zs.k; zctx.fillRect(X-hs,Y-hs,2*hs,2*hs); zctx.strokeRect(X-hs,Y-hs,2*hs,2*hs)} }
   }
 }
 function zoomInfo(){
@@ -370,10 +372,37 @@ function zpos(e){
   return {x:zs.sx+(e.clientX-b.left)/b.width*zs.zw, y:zs.sy+(e.clientY-b.top)/b.height*zs.zh};
 }
 let drag=null;
-zoom.addEventListener('pointerdown',e=>{ if(!zs) return; zoom.setPointerCapture(e.pointerId); drag=zpos(e); zs.rect={x:drag.x,y:drag.y,w:1,h:1}; zoomDraw(); e.preventDefault()});
-zoom.addEventListener('pointermove',e=>{ if(!drag) return; const p=zpos(e);
-  zs.rect={x:Math.min(drag.x,p.x),y:Math.min(drag.y,p.y),w:Math.max(1,Math.abs(p.x-drag.x)),h:Math.max(1,Math.abs(p.y-drag.y))};
-  zoomDraw(); zoomInfo(); e.preventDefault()});
+const HANDLES=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+function hpos(r,h){return {x:r.x+(h[0]+1)/2*r.w, y:r.y+(h[1]+1)/2*r.h}}
+function toClient(x,y){const b=zoom.getBoundingClientRect(); return {x:b.left+(x-zs.sx)/zs.zw*b.width, y:b.top+(y-zs.sy)/zs.zh*b.height}}
+function hitTest(e){   // vraća {mode:'h',h} za ručku, {mode:'move'} za unutrašnjost, null za izvan pravokutnika
+  const r=zs.rect; if(!r||r.w<=1) return null;
+  let best=null,bd=26;   // tolerancija u CSS pikselima (prst)
+  for(const h of HANDLES){const c=toClient(...Object.values(hpos(r,h))); const d=Math.hypot(c.x-e.clientX,c.y-e.clientY); if(d<bd){bd=d;best={mode:'h',h}}}
+  if(best) return best;
+  const p=zpos(e); if(p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h) return {mode:'move'};
+  return null;
+}
+zoom.addEventListener('pointerdown',e=>{ if(!zs) return; zoom.setPointerCapture(e.pointerId); e.preventDefault();
+  const hit=hitTest(e), p=zpos(e);
+  if(hit&&hit.mode==='h') drag={mode:'h',h:hit.h};
+  else if(hit) drag={mode:'move',p0:p,r0:{...zs.rect}};
+  else { drag={mode:'new',p0:p}; zs.rect={x:p.x,y:p.y,w:1,h:1}; }
+  zoomDraw()});
+zoom.addEventListener('pointermove',e=>{ if(!drag||!zs) return; e.preventDefault(); const p=zpos(e), r=zs.rect;
+  if(drag.mode==='new'){
+    zs.rect={x:Math.min(drag.p0.x,p.x),y:Math.min(drag.p0.y,p.y),w:Math.max(1,Math.abs(p.x-drag.p0.x)),h:Math.max(1,Math.abs(p.y-drag.p0.y))};
+  }else if(drag.mode==='move'){
+    zs.rect={x:drag.r0.x+p.x-drag.p0.x,y:drag.r0.y+p.y-drag.p0.y,w:drag.r0.w,h:drag.r0.h};
+  }else{
+    let l=r.x,t=r.y,rt=r.x+r.w,bt=r.y+r.h; const [hx,hy]=drag.h;
+    if(hx<0) l=p.x; else if(hx>0) rt=p.x;
+    if(hy<0) t=p.y; else if(hy>0) bt=p.y;
+    zs.rect={x:Math.min(l,rt),y:Math.min(t,bt),w:Math.max(1,Math.abs(rt-l)),h:Math.max(1,Math.abs(bt-t))};
+    if(hx<0&&l>rt||hx>0&&rt<l) drag.h=[-hx,hy];       // povučeno preko suprotnog ruba: zamijeni ručku
+    if(hy<0&&t>bt||hy>0&&bt<t) drag.h=[drag.h[0],-hy];
+  }
+  zoomDraw(); zoomInfo()});
 const endDrag=e=>{drag=null};
 zoom.addEventListener('pointerup',endDrag); zoom.addEventListener('pointercancel',endDrag);
 document.querySelectorAll('[data-nudge]').forEach(b=>b.addEventListener('click',()=>{

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111418">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Brzina vozila 0.4.5 beta</title>
+<title>Brzina vozila 0.5 beta</title>
 <style>
   :root{--bg:#111418;--card:#1b2027;--line:#2c343f;--fg:#e8edf2;--mut:#93a0ad;--acc:#4ea1ff;--ok:#3ecf8e;--warn:#ffb454;--bad:#ff6b6b}
   *{box-sizing:border-box}
@@ -112,7 +112,7 @@
     <label class="btn big">📁 Odaberi video
       <input id="inFile" type="file" accept="video/*" hidden>
     </label>
-    <div style="font-size:11px;color:#6b7785;margin-top:6px">verzija 0.4.5 beta</div>
+    <div style="font-size:11px;color:#6b7785;margin-top:6px">verzija 0.5 beta</div>
   </section>
 
   <!-- NAKON OBRADE: pregled, rezultati, popis -->
@@ -141,7 +141,6 @@
         <div class="kv"><b id="rPts">–</b><span>sličica korišteno</span></div>
         <div class="kv"><b id="rW">–</b><span>širina pločice (px), od – do</span></div>
       </div>
-      <div style="margin-top:8px"><canvas id="graph" width="680" height="190"></canvas></div>
       <div id="rWarn"></div>
       <div class="row" style="margin-top:8px">
         <input id="reg" type="text" placeholder="Registracija (npr. DU 123-AB)" autocapitalize="characters">
@@ -235,6 +234,7 @@
 <!-- Napredak -->
 <div id="ovProg" class="overlay"><div class="panel">
   <div id="pTitle" style="font-weight:700;margin-bottom:6px">Mjerim…</div>
+  <canvas id="pGraph" width="680" height="200" class="hide" style="width:100%;height:auto;margin-bottom:6px"></canvas>
   <progress id="pBar" value="0" max="100"></progress>
   <div id="pTxt" class="info" style="margin:6px 0"></div>
   <button id="pCancel" class="bad">Prekini</button>
@@ -242,7 +242,7 @@
 
 <script>
 "use strict";
-const APP_VER='0.4.5 beta';
+const APP_VER='0.5 beta';
 const LOGS=[]; const T0L=performance.now();
 function L(...a){ const t=((performance.now()-T0L)/1000).toFixed(2); const m=a.map(x=>{ if(x instanceof Error) return x.message; if(typeof x==='object'){ try{return JSON.stringify(x)}catch(e){return String(x)} } return String(x) }).join(' '); LOGS.push(`[${t}] ${m}`); if(LOGS.length>1500) LOGS.splice(0,300) }
 for(const k of ['log','warn','error']){ const o=console[k].bind(console); console[k]=(...a)=>{ L(k.toUpperCase()+':',...a); o(...a) } }
@@ -667,7 +667,7 @@ async function trackDir(frames,box,refIdx,rect,dir,ctl){
     st={cx:ncx,cy:ncy,W:nW,H:nH,vx:0.5*(ncx-st.cx)+0.5*st.vx,vy:0.5*(ncy-st.cy)+0.5*st.vy};
     T=nT;
     out.push({i:idx,t:tt,W:nW,cx:ncx,cy:ncy,ncc:fine.n});
-    ctl.onStep&&ctl.onStep(dir,out.length,nW);
+    ctl.onStep&&ctl.onStep(dir,out.length,nW,tt);
     if(dir<0&&nW<30) break; if(dir>0&&nW>270) break;
     if(out.length%4===0) await frameDone();
   }
@@ -691,7 +691,7 @@ function speedOf(pts,f,wmin){
 /* ---------- mjerenje ---------- */
 let ctl=null;
 async function startMeasure(t0,rect,veh,refRoiIn){
-  ctl={cancel:false,rate:0.25}; wakeOn(); V.classList.add('full'); $('ovProg').classList.add('on'); $('pTitle').textContent='Pripremam video…'; $('pTxt').textContent='';
+  ctl={cancel:false,rate:0.25}; $('pGraph').classList.add('hide'); wakeOn(); V.classList.add('full'); $('ovProg').classList.add('on'); $('pTitle').textContent='Pripremam video…'; $('pTxt').textContent='';
   if(measN++>0||V.error){ try{ await reloadVideo() }catch(e){ L('reloadVideo greška',e) } }
   L('startMeasure: t0='+t0.toFixed(2)+' rect='+[rect.cx,rect.cy,rect.w,rect.h].map(x=>Math.round(x)).join(',')+' '+vstate());
   $('ovProg').classList.add('on'); $('pBar').value=0;
@@ -711,7 +711,7 @@ async function startMeasure(t0,rect,veh,refRoiIn){
     if(!ref) throw new Error('Oznaka pločice nije pronađena u pročitanim sličicama.');
     ctl.refdx=ref.dx||0; ctl.refdy=ref.dy||0;
     ctl.phase=2; $('pTitle').textContent='2/3 · Pratim pločicu unatrag i naprijed…'; $('pBar').value=0;
-    let nb=0,nf=0; ctl.onStep=(dir,n,W)=>{ if(dir<0) nb=n; else nf=n; $('pBar').value=Math.min(100,Math.round(100*(nb+nf)/Math.max(1,frames.length))); $('pTxt').textContent=`unatrag: ${nb} sličica, naprijed: ${nf} sličica, širina ${fmt(W,0)} px`};
+    let nb=0,nf=0; ctl.live=[]; $('pGraph').classList.remove('hide'); let lastDraw=0; ctl.onStep=(dir,n,W,tt)=>{ if(dir<0) nb=n; else nf=n; ctl.live.push({t:tt,W}); if(performance.now()-lastDraw>300){ lastDraw=performance.now(); drawGraph({pts:ctl.live,f:curF()},$('pGraph')) }; $('pBar').value=Math.min(100,Math.round(100*(nb+nf)/Math.max(1,frames.length))); $('pTxt').textContent=`unatrag: ${nb} sličica, naprijed: ${nf} sličica, širina ${fmt(W,0)} px`};
     await frameDone();
     const back=ctl.cancel?[]:await trackDir(frames,box,ref.i,rect,-1,ctl);
     const fwd=ctl.cancel?[]:await trackDir(frames,box,ref.i,rect,+1,ctl);
@@ -724,7 +724,8 @@ async function startMeasure(t0,rect,veh,refRoiIn){
     }
     result=finishMeasure(pts,rect,frames[ref.i].t,ctl.cancel,{reg,regErr,veh});
   }catch(e){ $('pTxt').textContent='Greška: '+e.message; console.error(e); await sleep(2500) }
-  $('ovProg').classList.remove('on'); V.classList.remove('full'); wakeOff(); clearInterval(ctl&&ctl.tick);
+  if(result&&result.pts&&result.pts.length>2){ try{ drawGraph(result,$('pGraph')); $('pTitle').textContent='Gotovo'+(result.all?` · ${result.all.v.toFixed(1)} km/h`:''); $('pBar').value=100 }catch(e){} await sleep(2200) }
+  $('pGraph').classList.add('hide'); $('ovProg').classList.remove('on'); V.classList.remove('full'); wakeOff(); clearInterval(ctl&&ctl.tick);
   try{ await seekTo(t0); curT=t0; drawView(); }catch(e){}
   return result;
 }
@@ -767,8 +768,8 @@ function showResult(r,cancelled){
   $('rWarn').innerHTML=h;
   drawGraph(r);
 }
-function drawGraph(r){
-  const c=$('graph'), x=c.getContext('2d'), W=c.width, H=c.height; x.clearRect(0,0,W,H);
+function drawGraph(r,cv){
+  const c=cv||$('pGraph'); if(!c) return; const x=c.getContext('2d'), W=c.width, H=c.height; x.clearRect(0,0,W,H);
   const pts=r.pts.filter(p=>p.W>=22); if(pts.length<2) return;
   const f=r.f, t=pts.map(p=>p.t), Z=pts.map(p=>f*EU_PLATE_M/p.W);
   const t0=Math.min(...t), t1=Math.max(...t), zmax=Math.max(...Z)*1.05, zmin=0;
